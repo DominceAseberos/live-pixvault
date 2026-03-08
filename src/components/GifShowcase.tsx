@@ -13,16 +13,38 @@ interface GiphyGif {
   images: {
     fixed_height: { url: string; width: string; height: string };
     original: { url: string };
-    downsized_small: { mp4: string };
   };
   import_datetime: string;
   trending_datetime: string;
 }
 
+// Fallback sample GIFs when API is unavailable
+const FALLBACK_GIFS: GiphyGif[] = [
+  "coding", "design", "animation", "neon", "abstract", "pixel-art",
+  "loading", "creative", "gradient", "dark-mode", "ui", "vaporwave",
+].map((tag, i) => ({
+  id: `fallback-${i}`,
+  title: `${tag.charAt(0).toUpperCase() + tag.slice(1)} GIF`,
+  url: `https://giphy.com/search/${tag}`,
+  images: {
+    fixed_height: {
+      url: `https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDJhOXJ0bWF4NnN3ZDJnZWJ0dXY0eXV1Y3FncGF6bTRrOHl4eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/${["xT9IgzoKnwFNmISR8I","l0HlBO7eyXzSZkJnd","3oEjHWpiVIOGXT5l9m","26tn33aiTi1jkl6H6","l3q2K5jinAlChoCLS","xT9IgG50Fb7Mi2PfaO","3oEjI6SIIHBdRxXI40","l46Cy1rHbQ92uuLXa","xT9IgzoKnwFNmISR8I","l0HlBO7eyXzSZkJnd","3oEjHWpiVIOGXT5l9m","26tn33aiTi1jkl6H6"][i]}/giphy.gif`,
+      width: "200",
+      height: `${150 + (i % 3) * 50}`,
+    },
+    original: {
+      url: `https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjEx/${["xT9IgzoKnwFNmISR8I"][0]}/giphy.gif`,
+    },
+  },
+  import_datetime: new Date().toISOString(),
+  trending_datetime: new Date().toISOString(),
+}));
+
 const GifShowcase = () => {
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [apiDown, setApiDown] = useState(false);
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const [saved, setSaved] = useState<Set<string>>(new Set());
@@ -36,11 +58,17 @@ const GifShowcase = () => {
         ? `${BASE_URL}/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(searchQuery)}&limit=12&offset=${newOffset}&rating=g`
         : `${BASE_URL}/trending?api_key=${GIPHY_KEY}&limit=12&offset=${newOffset}&rating=g`;
       const res = await fetch(endpoint);
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        // API key may be expired, use fallback
+        setApiDown(true);
+        setGifs(FALLBACK_GIFS);
+        return;
+      }
       const data = await res.json();
       setGifs(prev => append ? [...prev, ...data.data] : data.data);
     } catch {
-      setError(true);
+      setApiDown(true);
+      setGifs(FALLBACK_GIFS);
     } finally {
       setLoading(false);
     }
@@ -55,7 +83,9 @@ const GifShowcase = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setOffset(0);
-      fetchGifs(value, 0);
+      if (!apiDown) {
+        fetchGifs(value, 0);
+      }
     }, 300);
   };
 
@@ -68,19 +98,6 @@ const GifShowcase = () => {
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
     toast.success("GIF URL copied!");
-  };
-
-  const downloadGif = async (url: string, title: string) => {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${title || "gif"}.gif`;
-      a.click();
-    } catch {
-      toast.error("Download failed");
-    }
   };
 
   const toggleSave = (id: string) => {
@@ -134,6 +151,23 @@ const GifShowcase = () => {
           </div>
         </div>
 
+        {/* API status notice */}
+        {apiDown && (
+          <div className="mb-8 rounded-lg border border-border bg-muted/30 p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              🔑 GIPHY demo key has limited access. Showing preview content.{" "}
+              <a
+                href="https://developers.giphy.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Get a free API key →
+              </a>
+            </p>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div className="mb-8 text-center text-muted-foreground">
@@ -156,6 +190,9 @@ const GifShowcase = () => {
                 alt={gif.title}
                 className="w-full"
                 loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
               />
 
               {/* Badges */}
@@ -183,12 +220,6 @@ const GifShowcase = () => {
                     className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground hover:opacity-90"
                   >
                     <Copy className="h-3 w-3" /> Copy
-                  </button>
-                  <button
-                    onClick={() => downloadGif(gif.images.original.url, gif.title)}
-                    className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-[10px] text-foreground hover:bg-muted"
-                  >
-                    <Download className="h-3 w-3" /> Save
                   </button>
                   <button
                     onClick={() => toggleSave(gif.id)}
@@ -221,13 +252,12 @@ const GifShowcase = () => {
         </div>
 
         {/* Load More */}
-        {!loading && gifs.length > 0 && (
+        {!loading && gifs.length > 0 && !apiDown && (
           <div className="mt-10 flex flex-col items-center gap-3">
             <button
               onClick={loadMore}
               className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-6 py-3 font-display text-sm font-semibold text-foreground transition-all hover:border-primary hover:bg-muted"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Load More
             </button>
             <span className="font-mono text-xs text-secondary hover:underline cursor-pointer">
