@@ -57,6 +57,16 @@ const stripHtml = (html: string) => {
   return tmp.textContent?.slice(0, 150) || "";
 };
 
+const isValidImage = (url: string) =>
+  url && url.startsWith("http") && !url.includes("feedburner") && !url.includes("feeds.feedburner");
+
+const getCardBg = (item: FeedItem) => {
+  if (item.thumbnail && isValidImage(item.thumbnail)) {
+    return `url(${item.thumbnail})`;
+  }
+  return `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.source + item.title)})`;
+};
+
 const hashColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -211,11 +221,7 @@ const InspirationFeed = () => {
                 <div className="flex flex-col sm:flex-row">
                   <div
                     className="h-48 w-full sm:h-auto sm:w-1/3 bg-cover bg-center"
-                    style={{
-                      backgroundImage: featured.thumbnail
-                        ? `url(${featured.thumbnail})`
-                        : `linear-gradient(135deg, ${hashColor(featured.title)}, ${hashColor(featured.title + "x")})`,
-                    }}
+                    style={{ backgroundImage: getCardBg(featured) }}
                   />
                   <div className="flex-1 p-6">
                     <div className="mb-3 flex items-center gap-2">
@@ -260,11 +266,7 @@ const InspirationFeed = () => {
                 >
                   <div
                     className="h-40 bg-cover bg-center"
-                    style={{
-                      backgroundImage: item.thumbnail
-                        ? `url(${item.thumbnail})`
-                        : `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.title + "z")})`,
-                    }}
+                    style={{ backgroundImage: getCardBg(item) }}
                   >
                     <div className="p-3">
                       <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${getTypeChip(item).cls}`}>
