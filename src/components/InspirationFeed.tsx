@@ -267,11 +267,8 @@ const InspirationFeed = () => {
                 >
                   <div
                     className="h-40 bg-cover bg-center"
-                    style={{
-                      backgroundImage: item.thumbnail
-                        ? `url(${item.thumbnail})`
-                        : `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.title + "z")})`,
-                    }}
+                    style={{ backgroundImage: getCardBg(item) }}
+                  >
                   >
                     <div className="p-3">
                       <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${getTypeChip(item).cls}`}>
