@@ -57,6 +57,16 @@ const stripHtml = (html: string) => {
   return tmp.textContent?.slice(0, 150) || "";
 };
 
+const isValidImage = (url: string) =>
+  url && url.startsWith("http") && !url.includes("feedburner") && !url.includes("feeds.feedburner");
+
+const getCardBg = (item: FeedItem) => {
+  if (item.thumbnail && isValidImage(item.thumbnail)) {
+    return `url(${item.thumbnail})`;
+  }
+  return `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.source + item.title)})`;
+};
+
 const hashColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
