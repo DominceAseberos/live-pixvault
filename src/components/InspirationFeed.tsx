@@ -221,11 +221,8 @@ const InspirationFeed = () => {
                 <div className="flex flex-col sm:flex-row">
                   <div
                     className="h-48 w-full sm:h-auto sm:w-1/3 bg-cover bg-center"
-                    style={{
-                      backgroundImage: featured.thumbnail
-                        ? `url(${featured.thumbnail})`
-                        : `linear-gradient(135deg, ${hashColor(featured.title)}, ${hashColor(featured.title + "x")})`,
-                    }}
+                    style={{ backgroundImage: getCardBg(featured) }}
+                  />
                   />
                   <div className="flex-1 p-6">
                     <div className="mb-3 flex items-center gap-2">
