@@ -223,7 +223,6 @@ const InspirationFeed = () => {
                     className="h-48 w-full sm:h-auto sm:w-1/3 bg-cover bg-center"
                     style={{ backgroundImage: getCardBg(featured) }}
                   />
-                  />
                   <div className="flex-1 p-6">
                     <div className="mb-3 flex items-center gap-2">
                       <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${getTypeChip(featured).cls}`}>
