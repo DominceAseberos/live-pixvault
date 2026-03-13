@@ -268,7 +268,6 @@ const InspirationFeed = () => {
                     className="h-40 bg-cover bg-center"
                     style={{ backgroundImage: getCardBg(item) }}
                   >
-                  >
                     <div className="p-3">
                       <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${getTypeChip(item).cls}`}>
                         {getTypeChip(item).label}
