@@ -210,7 +210,7 @@ const UIComponents = () => {
                       <div className="h-[180px] overflow-hidden">
                         <iframe
                           srcDoc={`<!DOCTYPE html><html><head><style>body{display:flex;align-items:center;justify-content:center;min-height:100%;margin:0;padding:16px;font-family:sans-serif;background:#fafafa;}</style></head><body>${comp.html}</body></html>`}
-                          className="h-full w-full border-0 pointer-events-none"
+                          className="h-full w-full border-0"
                           sandbox="allow-scripts"
                           title={comp.name}
                           loading="lazy"
