@@ -1,70 +1,130 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Search, Copy, Bookmark, ExternalLink } from "lucide-react";
+import { Search, Copy, Bookmark, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-const GIPHY_KEY = "dc6zaTOxFJmzC";
-const BASE_URL = "https://api.giphy.com/v1/gifs";
-
-interface GiphyGif {
+interface RedditGif {
   id: string;
   title: string;
   url: string;
-  images: {
-    fixed_height: { url: string; width: string; height: string };
-    original: { url: string };
-    fixed_width_small: { url: string };
-  };
-  import_datetime: string;
-  trending_datetime: string;
+  gifUrl: string;
+  previewUrl: string;
+  subreddit: string;
+  score: number;
+  created: number;
 }
 
+const SUBREDDITS = ["gifs", "reactiongifs", "HighQualityGifs", "animatedpixelart"];
+
+const extractGifUrl = (post: any): string | null => {
+  // Direct .gif URLs
+  if (post.url?.endsWith(".gif")) return post.url;
+  // Reddit hosted video preview as gif
+  if (post.preview?.images?.[0]?.variants?.gif?.source?.url) {
+    return post.preview.images[0].variants.gif.source.url.replace(/&amp;/g, "&");
+  }
+  // Reddit preview as mp4 (works in <img> via poster, but let's use the gif variant)
+  if (post.preview?.images?.[0]?.variants?.mp4?.source?.url) {
+    return post.preview.images[0].variants.mp4.source.url.replace(/&amp;/g, "&");
+  }
+  // Imgur gifv → gif
+  if (post.url?.includes("imgur.com") && post.url?.endsWith(".gifv")) {
+    return post.url.replace(".gifv", ".gif");
+  }
+  // i.redd.it gif
+  if (post.url?.includes("i.redd.it") && (post.url?.endsWith(".gif") || post.url?.endsWith(".png") || post.url?.endsWith(".jpg"))) {
+    return post.url;
+  }
+  // Fallback: use preview image (static but better than nothing)
+  if (post.preview?.images?.[0]?.source?.url) {
+    return post.preview.images[0].source.url.replace(/&amp;/g, "&");
+  }
+  return null;
+};
+
+const getPreviewUrl = (post: any): string => {
+  if (post.preview?.images?.[0]?.resolutions) {
+    const resolutions = post.preview.images[0].resolutions;
+    const mid = resolutions[Math.min(2, resolutions.length - 1)];
+    if (mid?.url) return mid.url.replace(/&amp;/g, "&");
+  }
+  if (post.thumbnail && post.thumbnail.startsWith("http")) return post.thumbnail;
+  return "";
+};
+
 const GifShowcase = () => {
-  const [gifs, setGifs] = useState<GiphyGif[]>([]);
+  const [gifs, setGifs] = useState<RedditGif[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [offset, setOffset] = useState(0);
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [activeSub, setActiveSub] = useState("gifs");
+  const [after, setAfter] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const fetchGifs = useCallback(async (searchQuery: string, newOffset: number, append = false) => {
+  const parseRedditPosts = (posts: any[]): RedditGif[] => {
+    return posts
+      .map((child: any) => {
+        const post = child.data;
+        const gifUrl = extractGifUrl(post);
+        if (!gifUrl) return null;
+        return {
+          id: post.id,
+          title: post.title,
+          url: `https://reddit.com${post.permalink}`,
+          gifUrl,
+          previewUrl: getPreviewUrl(post),
+          subreddit: post.subreddit,
+          score: post.score,
+          created: post.created_utc,
+        };
+      })
+      .filter(Boolean) as RedditGif[];
+  };
+
+  const fetchGifs = useCallback(async (sub: string, searchQuery: string, afterToken: string | null = null, append = false) => {
     setLoading(true);
     try {
-      const endpoint = searchQuery
-        ? `${BASE_URL}/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(searchQuery)}&limit=12&offset=${newOffset}&rating=g`
-        : `${BASE_URL}/trending?api_key=${GIPHY_KEY}&limit=12&offset=${newOffset}&rating=g`;
-      const res = await fetch(endpoint);
-      if (!res.ok) throw new Error("API error");
+      let endpoint: string;
+      if (searchQuery) {
+        endpoint = `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(searchQuery)}&restrict_sr=on&sort=relevance&limit=20${afterToken ? `&after=${afterToken}` : ""}`;
+      } else {
+        endpoint = `https://www.reddit.com/r/${sub}/hot.json?limit=20${afterToken ? `&after=${afterToken}` : ""}`;
+      }
+      const res = await fetch(endpoint, {
+        headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) throw new Error("Reddit API error");
       const data = await res.json();
-      const results = data.data || [];
+      const posts = data?.data?.children || [];
+      const results = parseRedditPosts(posts);
+      setAfter(data?.data?.after || null);
+      setHasMore(!!data?.data?.after);
       setGifs(prev => append ? [...prev, ...results] : results);
-      setHasMore(results.length === 12);
     } catch {
       if (!append) setGifs([]);
-      toast.error("Could not load GIFs — GIPHY rate limit reached. Try again shortly.");
+      toast.error("Could not load GIFs. Try again shortly.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchGifs("", 0);
-  }, [fetchGifs]);
+    setAfter(null);
+    fetchGifs(activeSub, query);
+  }, [activeSub, fetchGifs]);
 
   const handleSearch = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setOffset(0);
-      fetchGifs(value, 0);
-    }, 400);
+      setAfter(null);
+      fetchGifs(activeSub, value);
+    }, 500);
   };
 
   const loadMore = () => {
-    const newOffset = offset + 12;
-    setOffset(newOffset);
-    fetchGifs(query, newOffset, true);
+    fetchGifs(activeSub, query, after, true);
   };
 
   const copyUrl = (url: string) => {
@@ -81,8 +141,7 @@ const GifShowcase = () => {
     toast.success(saved.has(id) ? "Removed" : "Saved!");
   };
 
-  const isNew = (dateStr: string) => Date.now() - new Date(dateStr).getTime() < 86400000;
-  const isTrending = (dateStr: string) => dateStr && dateStr !== "0000-00-00 00:00:00";
+  const isHot = (score: number) => score > 1000;
 
   return (
     <section id="gif-showcase" className="relative py-24 bg-background">
@@ -91,15 +150,32 @@ const GifShowcase = () => {
           <div className="mb-4 inline-flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-accent animate-pulse-glow" />
             <span className="font-mono text-xs uppercase tracking-widest text-primary">
-              LIVE · POWERED BY GIPHY API
+              LIVE · POWERED BY REDDIT
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             GIFs that actually move.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Trending animations, loaded live. Search any mood, vibe, or topic.
+            Trending animations from Reddit's best GIF communities. Search any mood, vibe, or topic.
           </p>
+        </div>
+
+        {/* Subreddit tabs */}
+        <div className="mb-6 flex flex-wrap justify-center gap-2">
+          {SUBREDDITS.map((sub) => (
+            <button
+              key={sub}
+              onClick={() => { setActiveSub(sub); setQuery(""); }}
+              className={`rounded-full px-4 py-2 font-mono text-xs transition-all ${
+                activeSub === sub
+                  ? "bg-accent text-accent-foreground"
+                  : "border border-border text-muted-foreground hover:border-accent hover:text-foreground"
+              }`}
+            >
+              r/{sub}
+            </button>
+          ))}
         </div>
 
         <div className="mx-auto mb-10 max-w-xl">
@@ -109,7 +185,7 @@ const GifShowcase = () => {
               type="text"
               value={query}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder='Search GIFs... e.g. "loading", "dark mode", "vaporwave"'
+              placeholder='Search GIFs... e.g. "cat", "loading", "pixel art"'
               className="w-full rounded-xl border border-border bg-muted/50 py-3 pl-11 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
             />
           </div>
@@ -125,26 +201,33 @@ const GifShowcase = () => {
               className="group relative mb-2 break-inside-avoid overflow-hidden rounded-md border border-border card-hover-cyan"
             >
               <img
-                src={gif.images.fixed_height.url}
+                src={gif.gifUrl}
                 alt={gif.title}
                 className="w-full"
                 loading="lazy"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (gif.previewUrl && img.src !== gif.previewUrl) {
+                    img.src = gif.previewUrl;
+                  } else {
+                    img.style.display = "none";
+                  }
+                }}
               />
               <div className="absolute top-2 left-2 flex gap-1">
-                {i < 3 && isTrending(gif.trending_datetime) && (
-                  <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] font-bold text-accent-foreground">TRENDING</span>
+                {isHot(gif.score) && (
+                  <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] font-bold text-accent-foreground">🔥 HOT</span>
                 )}
-                {isNew(gif.import_datetime) && (
-                  <span className="rounded-full bg-amber-tag px-2 py-0.5 font-mono text-[10px] font-bold text-primary-foreground">NEW</span>
-                )}
+                <span className="rounded-full bg-muted/80 px-2 py-0.5 font-mono text-[10px] text-foreground">
+                  r/{gif.subreddit}
+                </span>
               </div>
               <div className="absolute inset-0 flex flex-col justify-end bg-background/75 p-3 opacity-0 transition-opacity group-hover:opacity-100">
                 <p className="mb-2 truncate font-display text-xs font-semibold text-foreground">
                   {gif.title || "Untitled GIF"}
                 </p>
                 <div className="flex gap-2">
-                  <button onClick={() => copyUrl(gif.images.original.url)} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground hover:opacity-90">
+                  <button onClick={() => copyUrl(gif.gifUrl)} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground hover:opacity-90">
                     <Copy className="h-3 w-3" /> Copy
                   </button>
                   <button onClick={() => toggleSave(gif.id)} className={`ml-auto rounded-full p-1 transition-colors ${saved.has(gif.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
@@ -152,7 +235,7 @@ const GifShowcase = () => {
                   </button>
                 </div>
                 <a href={gif.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-primary">
-                  via GIPHY <ExternalLink className="h-2.5 w-2.5" />
+                  via Reddit <ExternalLink className="h-2.5 w-2.5" />
                 </a>
               </div>
             </motion.div>
@@ -164,8 +247,14 @@ const GifShowcase = () => {
         </div>
 
         {!loading && gifs.length === 0 && (
-          <div className="py-16 text-center text-muted-foreground">
-            No GIFs found. Try a different search term.
+          <div className="flex flex-col items-center gap-4 py-16 text-center text-muted-foreground">
+            <p>No GIFs found. Try a different search or subreddit.</p>
+            <button
+              onClick={() => { setQuery(""); fetchGifs(activeSub, ""); }}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm hover:border-primary hover:text-foreground transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Reset
+            </button>
           </div>
         )}
 

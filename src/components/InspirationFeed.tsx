@@ -23,7 +23,7 @@ const SOURCES = [
 const RSS2JSON_BASE = "https://api.rss2json.com/v1/api.json";
 const HN_ENDPOINT = "https://hn.algolia.com/api/v1/search?tags=story&query=web+design+UI+UX&hitsPerPage=10";
 
-const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_TTL = 6 * 60 * 60 * 1000;
 
 const getCached = (key: string): FeedItem[] | null => {
   try {
@@ -57,21 +57,44 @@ const stripHtml = (html: string) => {
   return tmp.textContent?.slice(0, 150) || "";
 };
 
-const isValidImage = (url: string) =>
-  url && url.startsWith("http") && !url.includes("feedburner") && !url.includes("feeds.feedburner");
-
-const getCardBg = (item: FeedItem) => {
-  if (item.thumbnail && isValidImage(item.thumbnail)) {
-    return `url(${item.thumbnail})`;
+/** Extract first image URL from HTML content/description */
+const extractImageFromHtml = (html: string): string => {
+  if (!html) return "";
+  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (match && match[1] && match[1].startsWith("http")) {
+    return match[1];
   }
-  return `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.source + item.title)})`;
+  return "";
 };
+
+const isValidImage = (url: string) =>
+  url &&
+  url.startsWith("http") &&
+  !url.includes("feedburner") &&
+  !url.includes("feeds.feedburner") &&
+  !url.includes("flattr.com") &&
+  !url.includes("wp-content/plugins");
 
 const hashColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   const h = Math.abs(hash % 360);
   return `hsl(${h}, 60%, 25%)`;
+};
+
+const getCardBg = (item: FeedItem) => {
+  // Priority: thumbnail → extracted from description → gradient
+  const thumb = item.thumbnail;
+  if (thumb && isValidImage(thumb)) {
+    return { backgroundImage: `url(${thumb})` };
+  }
+  const extracted = extractImageFromHtml(item.description);
+  if (extracted && isValidImage(extracted)) {
+    return { backgroundImage: `url(${extracted})` };
+  }
+  return {
+    backgroundImage: `linear-gradient(135deg, ${hashColor(item.title)}, ${hashColor(item.source + item.title)})`,
+  };
 };
 
 const getTypeChip = (item: FeedItem) => {
@@ -96,15 +119,24 @@ const InspirationFeed = () => {
       const res = await fetch(`${RSS2JSON_BASE}?rss_url=${encodeURIComponent(source.rss)}&count=10`);
       const data = await res.json();
       if (data.status !== "ok") return [];
-      const items: FeedItem[] = data.items.map((item: any) => ({
-        title: item.title,
-        link: item.link,
-        thumbnail: item.thumbnail || item.enclosure?.link || "",
-        pubDate: item.pubDate,
-        description: item.description,
-        source: source.label,
-        categories: item.categories,
-      }));
+      const items: FeedItem[] = data.items.map((item: any) => {
+        // Try multiple sources for thumbnail
+        const thumbnail =
+          item.thumbnail ||
+          item.enclosure?.link ||
+          extractImageFromHtml(item.content || "") ||
+          extractImageFromHtml(item.description || "") ||
+          "";
+        return {
+          title: item.title,
+          link: item.link,
+          thumbnail,
+          pubDate: item.pubDate,
+          description: item.content || item.description || "",
+          source: source.label,
+          categories: item.categories,
+        };
+      });
       setCache(cacheKey, items);
       return items;
     } catch {
@@ -125,7 +157,7 @@ const InspirationFeed = () => {
         link: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
         thumbnail: "",
         pubDate: hit.created_at,
-        description: "",
+        description: hit.story_text || "",
         source: "HN Design",
         points: hit.points,
         categories: ["story"],
@@ -168,7 +200,6 @@ const InspirationFeed = () => {
   return (
     <section id="inspiration" className="relative py-24 bg-background">
       <div className="container mx-auto px-4">
-        {/* Header */}
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-accent">
@@ -183,7 +214,6 @@ const InspirationFeed = () => {
           </p>
         </div>
 
-        {/* Source Tabs */}
         <div className="mb-10 flex flex-wrap justify-center gap-2">
           {[...SOURCES.map((s) => s.label), "HN Design"].map((label) => (
             <button
@@ -208,7 +238,6 @@ const InspirationFeed = () => {
           </div>
         ) : (
           <>
-            {/* Featured Card */}
             {featured && (
               <motion.a
                 href={featured.link}
@@ -220,8 +249,8 @@ const InspirationFeed = () => {
               >
                 <div className="flex flex-col sm:flex-row">
                   <div
-                    className="h-48 w-full sm:h-auto sm:w-1/3 bg-cover bg-center"
-                    style={{ backgroundImage: getCardBg(featured) }}
+                    className="h-48 w-full sm:h-auto sm:min-h-[200px] sm:w-1/3 bg-cover bg-center"
+                    style={getCardBg(featured)}
                   />
                   <div className="flex-1 p-6">
                     <div className="mb-3 flex items-center gap-2">
@@ -254,7 +283,6 @@ const InspirationFeed = () => {
               </motion.a>
             )}
 
-            {/* Grid */}
             <div className="grid gap-4 sm:grid-cols-2">
               {rest.map((item, i) => (
                 <motion.div
@@ -266,7 +294,7 @@ const InspirationFeed = () => {
                 >
                   <div
                     className="h-40 bg-cover bg-center"
-                    style={{ backgroundImage: getCardBg(item) }}
+                    style={getCardBg(item)}
                   >
                     <div className="p-3">
                       <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${getTypeChip(item).cls}`}>
