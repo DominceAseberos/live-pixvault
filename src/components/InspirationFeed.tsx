@@ -15,13 +15,18 @@ interface FeedItem {
 }
 
 const SOURCES = [
-  { label: "CSS-Tricks", rss: "https://css-tricks.com/feed/" },
+  { label: "CSS-Tricks",   rss: "https://css-tricks.com/feed/" },
   { label: "Smashing Mag", rss: "https://www.smashingmagazine.com/feed/" },
-  { label: "Awwwards", rss: "https://www.awwwards.com/blog/feed/" },
+  { label: "Awwwards",     rss: "https://www.awwwards.com/blog/feed/" },
+  { label: "Codrops",      rss: "https://tympanus.net/codrops/feed/" },
+  { label: "Dev.to UI/UX", rss: "https://dev.to/feed/tag/webdev" },
+  { label: "web.dev",      rss: "https://web.dev/feed.xml" },
+  { label: "A List Apart", rss: "https://alistapart.com/main/feed/" },
+  { label: "UX Collective", rss: "https://uxdesign.cc/feed" },
 ];
 
 const RSS2JSON_BASE = "https://api.rss2json.com/v1/api.json";
-const HN_ENDPOINT = "https://hn.algolia.com/api/v1/search?tags=story&query=web+design+UI+UX&hitsPerPage=10";
+const HN_ENDPOINT = "https://hn.algolia.com/api/v1/search?tags=story&query=web+design+UI+UX+frontend&hitsPerPage=12";
 
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 
@@ -169,12 +174,42 @@ const InspirationFeed = () => {
     }
   }, []);
 
+  const fetchGitHubTrending = useCallback(async (): Promise<FeedItem[]> => {
+    const cacheKey = "pixvault_gh_trending";
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+    try {
+      // GitHub search API — no auth needed for public repos, sorted by stars
+      const res = await fetch(
+        "https://api.github.com/search/repositories?q=topic:frontend+topic:ui+stars:>500&sort=stars&order=desc&per_page=12",
+        { headers: { Accept: "application/vnd.github+json" } }
+      );
+      const data = await res.json();
+      const items: FeedItem[] = (data.items || []).map((repo: any) => ({
+        title: repo.full_name,
+        link: repo.html_url,
+        thumbnail: repo.owner?.avatar_url || "",
+        pubDate: repo.updated_at,
+        description: repo.description || "",
+        source: "GitHub",
+        points: repo.stargazers_count,
+        categories: repo.topics || [],
+      }));
+      setCache(cacheKey, items);
+      return items;
+    } catch {
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       let result: FeedItem[] = [];
       if (activeSource === "HN Design") {
         result = await fetchHN();
+      } else if (activeSource === "GitHub Trending") {
+        result = await fetchGitHubTrending();
       } else {
         const source = SOURCES.find((s) => s.label === activeSource);
         if (source) result = await fetchRSS(source);
@@ -183,7 +218,7 @@ const InspirationFeed = () => {
       setLoading(false);
     };
     load();
-  }, [activeSource, fetchRSS, fetchHN]);
+  }, [activeSource, fetchRSS, fetchHN, fetchGitHubTrending]);
 
   const toggleSave = (link: string) => {
     setSaved((prev) => {
@@ -215,7 +250,7 @@ const InspirationFeed = () => {
         </div>
 
         <div className="mb-10 flex flex-wrap justify-center gap-2">
-          {[...SOURCES.map((s) => s.label), "HN Design"].map((label) => (
+          {[...SOURCES.map((s) => s.label), "HN Design", "GitHub Trending"].map((label) => (
             <button
               key={label}
               onClick={() => setActiveSource(label)}
@@ -272,9 +307,9 @@ const InspirationFeed = () => {
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" /> {relativeTime(featured.pubDate)}
                       </span>
-                      {featured.points && featured.points > 500 && (
+                      {featured.points && featured.points > 100 && (
                         <span className="flex items-center gap-1 text-accent">
-                          <Flame className="h-3 w-3" /> {featured.points >= 1000 ? `${(featured.points / 1000).toFixed(1)}k` : featured.points} points
+                          <Flame className="h-3 w-3" /> {featured.points >= 1000 ? `${(featured.points / 1000).toFixed(1)}k` : featured.points} {activeSource === "GitHub Trending" ? "★" : "pts"}
                         </span>
                       )}
                     </div>
@@ -312,9 +347,9 @@ const InspirationFeed = () => {
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" /> {relativeTime(item.pubDate)}
                         </span>
-                        {item.points && item.points > 500 && (
+                      {item.points && item.points > 100 && (
                           <span className="flex items-center gap-1 text-accent">
-                            <Flame className="h-3 w-3" /> {item.points >= 1000 ? `${(item.points / 1000).toFixed(1)}k` : item.points}
+                            <Flame className="h-3 w-3" /> {item.points >= 1000 ? `${(item.points / 1000).toFixed(1)}k` : item.points} {activeSource === "GitHub Trending" ? "★" : "pts"}
                           </span>
                         )}
                       </div>
