@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Eye, Code2, Copy, Bookmark, ExternalLink } from "lucide-react";
+import { Eye, Code2, Copy, Bookmark, ExternalLink, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
-const CATEGORIES = ["All", "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", "Toggles"];
+const CATEGORIES = ["All", "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", "Toggles", "Badges", "Alerts", "Avatars", "Tooltips", "Progress"];
 
 interface UIComponent {
   name: string;
@@ -14,6 +14,7 @@ interface UIComponent {
 }
 
 const COMPONENTS: UIComponent[] = [
+  // ── BUTTONS ──────────────────────────────────────────────────────────────
   {
     name: "Neon Glow Button",
     category: "Buttons",
@@ -154,18 +155,163 @@ const COMPONENTS: UIComponent[] = [
     sourceUrl: "https://uiverse.io",
     html: `<div style="display:flex;gap:8px;flex-wrap:wrap;"><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:600;color:#00d4ff;background:#00d4ff15;border:1px solid #00d4ff30;border-radius:50px;"><span style="width:6px;height:6px;background:#00d4ff;border-radius:50%;"></span>Active</span><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:600;color:#F59E0B;background:#F59E0B15;border:1px solid #F59E0B30;border-radius:50px;"><span style="width:6px;height:6px;background:#F59E0B;border-radius:50%;"></span>Pending</span><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:600;color:#FF4D6D;background:#FF4D6D15;border:1px solid #FF4D6D30;border-radius:50px;"><span style="width:6px;height:6px;background:#FF4D6D;border-radius:50%;"></span>Error</span></div>`,
   },
+
+  // ── BADGES ───────────────────────────────────────────────────────────────
+  {
+    name: "Gradient Badge",
+    category: "Badges",
+    author: "badge_lab",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;gap:8px;flex-wrap:wrap;font-family:sans-serif;"><span style="padding:4px 14px;font-size:11px;font-weight:700;color:white;background:linear-gradient(135deg,#7C3AED,#00d4ff);border-radius:50px;">NEW</span><span style="padding:4px 14px;font-size:11px;font-weight:700;color:white;background:linear-gradient(135deg,#FF4D6D,#F59E0B);border-radius:50px;">HOT</span><span style="padding:4px 14px;font-size:11px;font-weight:700;color:white;background:linear-gradient(135deg,#22c55e,#00d4ff);border-radius:50px;">FREE</span></div>`,
+  },
+  {
+    name: "Outline Tags",
+    category: "Badges",
+    author: "tag_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;gap:6px;flex-wrap:wrap;font-family:sans-serif;"><span style="padding:3px 10px;font-size:11px;font-weight:600;color:#7C3AED;border:1.5px solid #7C3AED;border-radius:4px;">React</span><span style="padding:3px 10px;font-size:11px;font-weight:600;color:#00d4ff;border:1.5px solid #00d4ff;border-radius:4px;">TypeScript</span><span style="padding:3px 10px;font-size:11px;font-weight:600;color:#FF4D6D;border:1.5px solid #FF4D6D;border-radius:4px;">Tailwind</span><span style="padding:3px 10px;font-size:11px;font-weight:600;color:#F59E0B;border:1.5px solid #F59E0B;border-radius:4px;">Vite</span></div>`,
+  },
+  {
+    name: "Notification Dot",
+    category: "Badges",
+    author: "notif_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>@keyframes ping{75%,100%{transform:scale(2);opacity:0}}</style><div style="display:flex;gap:20px;font-family:sans-serif;"><div style="position:relative;display:inline-block;"><div style="width:40px;height:40px;background:#111122;border:1px solid #1e1e30;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">🔔</div><span style="position:absolute;-top:4px;right:-4px;top:-4px;"><span style="position:absolute;display:inline-flex;width:12px;height:12px;border-radius:50%;background:#FF4D6D;opacity:0.75;animation:ping 1s cubic-bezier(0,0,0.2,1) infinite;"></span><span style="position:relative;display:inline-flex;width:12px;height:12px;border-radius:50%;background:#FF4D6D;"></span></span></div><div style="position:relative;display:inline-block;"><div style="width:40px;height:40px;background:#111122;border:1px solid #1e1e30;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">💬</div><span style="position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;background:#7C3AED;border-radius:50px;font-size:10px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;">12</span></div></div>`,
+  },
+
+  // ── ALERTS ───────────────────────────────────────────────────────────────
+  {
+    name: "Success Alert",
+    category: "Alerts",
+    author: "alert_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#22c55e15;border:1px solid #22c55e40;border-radius:10px;width:260px;font-family:sans-serif;"><span style="font-size:18px;flex-shrink:0;">✅</span><div><div style="font-size:13px;font-weight:700;color:#22c55e;margin-bottom:2px;">Success!</div><div style="font-size:11px;color:#888;">Your changes have been saved.</div></div></div>`,
+  },
+  {
+    name: "Warning Alert",
+    category: "Alerts",
+    author: "alert_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:10px;width:260px;font-family:sans-serif;"><span style="font-size:18px;flex-shrink:0;">⚠️</span><div><div style="font-size:13px;font-weight:700;color:#F59E0B;margin-bottom:2px;">Warning</div><div style="font-size:11px;color:#888;">This action cannot be undone.</div></div></div>`,
+  },
+  {
+    name: "Error Alert",
+    category: "Alerts",
+    author: "alert_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#FF4D6D15;border:1px solid #FF4D6D40;border-radius:10px;width:260px;font-family:sans-serif;"><span style="font-size:18px;flex-shrink:0;">❌</span><div><div style="font-size:13px;font-weight:700;color:#FF4D6D;margin-bottom:2px;">Error</div><div style="font-size:11px;color:#888;">Something went wrong. Try again.</div></div></div>`,
+  },
+  {
+    name: "Info Banner",
+    category: "Alerts",
+    author: "banner_dev",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:#00d4ff10;border:1px solid #00d4ff30;border-radius:10px;width:260px;font-family:sans-serif;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:16px;">ℹ️</span><span style="font-size:12px;color:#00d4ff;">New version available!</span></div><button style="padding:4px 10px;font-size:11px;font-weight:600;color:#0a0a14;background:#00d4ff;border:none;border-radius:6px;cursor:pointer;">Update</button></div>`,
+  },
+
+  // ── AVATARS ───────────────────────────────────────────────────────────────
+  {
+    name: "Avatar Stack",
+    category: "Avatars",
+    author: "avatar_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;font-family:sans-serif;"><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#00d4ff);border:2px solid #0a0a14;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;z-index:4;">A</div><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FF4D6D,#F59E0B);border:2px solid #0a0a14;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;margin-left:-10px;z-index:3;">B</div><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#00d4ff);border:2px solid #0a0a14;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;margin-left:-10px;z-index:2;">C</div><div style="width:36px;height:36px;border-radius:50%;background:#1e1e30;border:2px solid #0a0a14;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#888;margin-left:-10px;z-index:1;">+9</div></div>`,
+  },
+  {
+    name: "Avatar with Status",
+    category: "Avatars",
+    author: "avatar_pro",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="display:flex;gap:16px;font-family:sans-serif;"><div style="position:relative;"><div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;">J</div><span style="position:absolute;bottom:1px;right:1px;width:11px;height:11px;background:#22c55e;border-radius:50%;border:2px solid #0a0a14;"></span></div><div style="position:relative;"><div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#FF4D6D,#F59E0B);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;">K</div><span style="position:absolute;bottom:1px;right:1px;width:11px;height:11px;background:#F59E0B;border-radius:50%;border:2px solid #0a0a14;"></span></div><div style="position:relative;"><div style="width:44px;height:44px;border-radius:50%;background:#1e1e30;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#888;">M</div><span style="position:absolute;bottom:1px;right:1px;width:11px;height:11px;background:#555;border-radius:50%;border:2px solid #0a0a14;"></span></div></div>`,
+  },
+
+  // ── TOOLTIPS ──────────────────────────────────────────────────────────────
+  {
+    name: "Hover Tooltip",
+    category: "Tooltips",
+    author: "tip_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>.tip-wrap{position:relative;display:inline-block;}.tip-wrap .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1e1e30;color:#f0f0ff;font-size:11px;padding:6px 10px;border-radius:6px;white-space:nowrap;border:1px solid #333;transition:opacity 0.2s;pointer-events:none;}.tip-wrap .tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1e1e30;}.tip-wrap:hover .tip{visibility:visible;opacity:1;}</style><div class="tip-wrap"><button style="padding:10px 24px;font-size:13px;font-weight:600;color:#0a0a14;background:#00d4ff;border:none;border-radius:8px;cursor:pointer;">Hover me</button><span class="tip">✨ This is a tooltip!</span></div>`,
+  },
+  {
+    name: "Cyan Tooltip",
+    category: "Tooltips",
+    author: "tip_pro",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>.ctip{position:relative;display:inline-block;}.ctip .ct{visibility:hidden;opacity:0;position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#7C3AED,#00d4ff);color:white;font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;white-space:nowrap;transition:opacity 0.2s;pointer-events:none;}.ctip:hover .ct{visibility:visible;opacity:1;}</style><div class="ctip" style="margin-top:40px;"><button style="padding:10px 24px;font-size:13px;font-weight:600;color:white;background:#111122;border:1.5px solid #7C3AED;border-radius:8px;cursor:pointer;">Info</button><span class="ct">Gradient tooltip 🎨</span></div>`,
+  },
+
+  // ── PROGRESS ──────────────────────────────────────────────────────────────
+  {
+    name: "Progress Bar",
+    category: "Progress",
+    author: "progress_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="width:260px;font-family:sans-serif;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:12px;color:#f0f0ff;font-weight:600;">Upload Progress</span><span style="font-size:12px;color:#00d4ff;font-weight:700;">72%</span></div><div style="height:8px;background:#1e1e30;border-radius:50px;overflow:hidden;"><div style="height:100%;width:72%;background:linear-gradient(90deg,#7C3AED,#00d4ff);border-radius:50px;"></div></div></div>`,
+  },
+  {
+    name: "Multi Progress",
+    category: "Progress",
+    author: "multi_prog",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="width:260px;font-family:sans-serif;display:flex;flex-direction:column;gap:10px;"><div><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;color:#888;">Design</span><span style="font-size:11px;color:#FF4D6D;">90%</span></div><div style="height:6px;background:#1e1e30;border-radius:50px;"><div style="height:100%;width:90%;background:#FF4D6D;border-radius:50px;"></div></div></div><div><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;color:#888;">Development</span><span style="font-size:11px;color:#7C3AED;">65%</span></div><div style="height:6px;background:#1e1e30;border-radius:50px;"><div style="height:100%;width:65%;background:#7C3AED;border-radius:50px;"></div></div></div><div><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;color:#888;">Testing</span><span style="font-size:11px;color:#22c55e;">40%</span></div><div style="height:6px;background:#1e1e30;border-radius:50px;"><div style="height:100%;width:40%;background:#22c55e;border-radius:50px;"></div></div></div></div>`,
+  },
+  {
+    name: "Circular Progress",
+    category: "Progress",
+    author: "circle_prog",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>@keyframes dash{from{stroke-dashoffset:220}to{stroke-dashoffset:55}}</style><div style="display:flex;gap:20px;font-family:sans-serif;"><div style="text-align:center;"><svg width="70" height="70" viewBox="0 0 70 70"><circle cx="35" cy="35" r="30" fill="none" stroke="#1e1e30" stroke-width="6"/><circle cx="35" cy="35" r="30" fill="none" stroke="#00d4ff" stroke-width="6" stroke-linecap="round" stroke-dasharray="188" stroke-dashoffset="47" transform="rotate(-90 35 35)"/><text x="35" y="40" text-anchor="middle" fill="#f0f0ff" font-size="13" font-weight="700">75%</text></svg><div style="font-size:10px;color:#888;margin-top:4px;">Storage</div></div><div style="text-align:center;"><svg width="70" height="70" viewBox="0 0 70 70"><circle cx="35" cy="35" r="30" fill="none" stroke="#1e1e30" stroke-width="6"/><circle cx="35" cy="35" r="30" fill="none" stroke="#FF4D6D" stroke-width="6" stroke-linecap="round" stroke-dasharray="188" stroke-dashoffset="94" transform="rotate(-90 35 35)"/><text x="35" y="40" text-anchor="middle" fill="#f0f0ff" font-size="13" font-weight="700">50%</text></svg><div style="font-size:10px;color:#888;margin-top:4px;">CPU</div></div></div>`,
+  },
+
+  // ── MORE BUTTONS ──────────────────────────────────────────────────────────
+  {
+    name: "Copy Button",
+    category: "Buttons",
+    author: "copy_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<button style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;font-size:13px;font-weight:600;color:#f0f0ff;background:#111122;border:1.5px solid #1e1e30;border-radius:8px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#00d4ff';this.style.color='#00d4ff'" onmouseout="this.style.borderColor='#1e1e30';this.style.color='#f0f0ff'" onclick="this.innerHTML='<svg width=14 height=14 viewBox=&quot;0 0 24 24&quot; fill=none stroke=currentColor stroke-width=3><polyline points=&quot;20 6 9 17 4 12&quot;></polyline></svg> Copied!';this.style.borderColor='#22c55e';this.style.color='#22c55e';setTimeout(()=>{this.innerHTML='<svg width=14 height=14 viewBox=&quot;0 0 24 24&quot; fill=none stroke=currentColor stroke-width=2><rect x=9 y=9 width=13 height=13 rx=2/><path d=&quot;M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1&quot;/></svg> Copy';this.style.borderColor='#1e1e30';this.style.color='#f0f0ff'},1500)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>`,
+  },
+  {
+    name: "Like Button",
+    category: "Buttons",
+    author: "like_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<button style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;font-size:13px;font-weight:600;color:#888;background:#111122;border:1.5px solid #1e1e30;border-radius:50px;cursor:pointer;transition:all 0.2s;" onclick="const liked=this.dataset.liked==='1';this.dataset.liked=liked?'0':'1';this.style.color=liked?'#888':'#FF4D6D';this.style.borderColor=liked?'#1e1e30':'#FF4D6D';this.style.background=liked?'#111122':'#FF4D6D15';this.children[0].textContent=liked?'🤍':'❤️';this.children[1].textContent=liked?'Like':'Liked'"><span>🤍</span><span>Like</span></button>`,
+  },
+
+  // ── MORE CARDS ────────────────────────────────────────────────────────────
+  {
+    name: "Pricing Card",
+    category: "Cards",
+    author: "price_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="padding:24px;width:200px;background:#111122;border:1px solid #7C3AED;border-radius:16px;font-family:sans-serif;text-align:center;"><div style="font-size:11px;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Pro Plan</div><div style="font-size:32px;font-weight:800;color:#f0f0ff;margin-bottom:4px;">$12<span style="font-size:14px;font-weight:400;color:#888;">/mo</span></div><div style="font-size:11px;color:#888;margin-bottom:16px;">Everything you need</div><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;text-align:left;"><div style="font-size:11px;color:#888;display:flex;gap:6px;align-items:center;"><span style="color:#22c55e;">✓</span>Unlimited projects</div><div style="font-size:11px;color:#888;display:flex;gap:6px;align-items:center;"><span style="color:#22c55e;">✓</span>Priority support</div><div style="font-size:11px;color:#888;display:flex;gap:6px;align-items:center;"><span style="color:#22c55e;">✓</span>Custom domains</div></div><button style="width:100%;padding:10px;font-size:12px;font-weight:700;color:white;background:#7C3AED;border:none;border-radius:8px;cursor:pointer;">Get Started</button></div>`,
+  },
+  {
+    name: "Notification Card",
+    category: "Cards",
+    author: "notif_card",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="width:260px;background:#111122;border:1px solid #1e1e30;border-radius:14px;overflow:hidden;font-family:sans-serif;"><div style="padding:12px 16px;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;"><span style="font-size:12px;font-weight:700;color:#f0f0ff;">Notifications</span><span style="font-size:10px;font-weight:600;color:white;background:#FF4D6D;padding:2px 7px;border-radius:50px;">3</span></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#00d4ff);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;">A</div><div><div style="font-size:12px;font-weight:600;color:#f0f0ff;">Alex liked your post</div><div style="font-size:10px;color:#555;margin-top:2px;">2 min ago</div></div></div><div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF4D6D,#F59E0B);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;">B</div><div><div style="font-size:12px;font-weight:600;color:#f0f0ff;">New comment on your design</div><div style="font-size:10px;color:#555;margin-top:2px;">5 min ago</div></div></div></div></div>`,
+  },
 ];
 
 const IFRAME_STYLE = `<!DOCTYPE html><html><head><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
 
 const UIComponents = () => {
   const [activeCategory, setActiveCategory] = useState("All");
+  const [search, setSearch] = useState("");
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
   const [savedComponents, setSavedComponents] = useState<Set<string>>(new Set());
 
-  const filtered = activeCategory === "All"
-    ? COMPONENTS
-    : COMPONENTS.filter(c => c.category.toLowerCase() === activeCategory.toLowerCase());
+  const filtered = useMemo(() => {
+    return COMPONENTS.filter(c => {
+      const matchCat = activeCategory === "All" || c.category.toLowerCase() === activeCategory.toLowerCase();
+      const matchSearch = search === "" || c.name.toLowerCase().includes(search.toLowerCase()) || c.category.toLowerCase().includes(search.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [activeCategory, search]);
 
   const toggleFlip = (name: string) => {
     setFlippedCards(prev => {
@@ -197,6 +343,26 @@ const UIComponents = () => {
           </p>
         </div>
 
+        {/* Search bar */}
+        <div className="mx-auto mb-8 max-w-md">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder='Search components... e.g. "button", "card", "loader"'
+              className="w-full rounded-xl border border-border bg-muted/50 py-3 pl-11 pr-10 font-body text-sm text-foreground placeholder:text-muted-foreground focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary transition-colors"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Category tabs */}
         <div className="mb-10 flex flex-wrap justify-center gap-2">
           {CATEGORIES.map(cat => (
             <button key={cat} onClick={() => setActiveCategory(cat)}
@@ -208,6 +374,13 @@ const UIComponents = () => {
               {cat}
             </button>
           ))}
+        </div>
+
+        {/* Result count */}
+        <div className="mb-6 text-center">
+          <span className="font-mono text-xs text-muted-foreground">
+            {filtered.length} component{filtered.length !== 1 ? "s" : ""} found
+          </span>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -272,6 +445,17 @@ const UIComponents = () => {
             );
           })}
         </div>
+
+        {/* Empty state */}
+        {filtered.length === 0 && (
+          <div className="py-16 text-center text-muted-foreground">
+            <p className="mb-3 text-sm">No components found for <span className="text-foreground">"{search}"</span></p>
+            <button onClick={() => { setSearch(""); setActiveCategory("All"); }}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs hover:border-secondary hover:text-foreground transition-colors">
+              <X className="h-3 w-3" /> Clear filters
+            </button>
+          </div>
+        )}
 
         <div className="mt-8 text-center">
           <a href="https://uiverse.io" target="_blank" rel="noopener noreferrer"
