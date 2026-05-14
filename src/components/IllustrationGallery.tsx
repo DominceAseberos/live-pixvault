@@ -76,14 +76,14 @@ const IllustrationGallery = () => {
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-accent">
-              FREE STOCK · NO ATTRIBUTION REQUIRED · POWERED BY PICSUM
+              Free Stock · No Attribution Required · Powered by Picsum
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             Stunning visuals, zero cost.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            High-quality stock photos from Unsplash photographers, served instantly via Lorem Picsum API.
+            High-quality stock photos from Unsplash photographers, served instantly. Copy the URL or download full resolution.
           </p>
         </div>
 

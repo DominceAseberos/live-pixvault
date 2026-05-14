@@ -3,10 +3,11 @@ import { motion } from "framer-motion";
 import { Menu, X, Zap } from "lucide-react";
 
 const navLinks = [
-  { label: "GIFs", href: "#gif-showcase" },
-  { label: "Components", href: "#ui-components" },
+  { label: "GIF Library", href: "#gif-showcase" },
+  { label: "UI Components", href: "#ui-components" },
+  { label: "Icons", href: "#icon-showcase" },
+  { label: "Photos", href: "#illustrations" },
   { label: "Inspiration", href: "#inspiration" },
-  { label: "Resources", href: "#resources" },
 ];
 
 const Navbar = () => {
@@ -37,7 +38,7 @@ const Navbar = () => {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <span className="font-mono text-xs text-muted-foreground">100% FREE</span>
+          <span className="font-mono text-xs text-muted-foreground">Always Free</span>
           <div className="h-2 w-2 rounded-full bg-primary animate-pulse-glow" />
         </div>
 

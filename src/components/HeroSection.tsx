@@ -24,18 +24,18 @@ const HeroSection = () => {
         >
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2">
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse-glow" />
-            <span className="font-mono text-xs text-primary">LIVE APIs</span>
-            <span className="font-mono text-xs text-muted-foreground">· NO SUBSCRIPTION · 100% FREE</span>
+            <span className="font-mono text-xs text-primary">Live APIs</span>
+            <span className="font-mono text-xs text-muted-foreground">· No sign-up · Always free</span>
           </div>
 
           <h1 className="mx-auto max-w-4xl font-display text-5xl font-bold leading-tight text-foreground sm:text-6xl lg:text-7xl">
-            Your free vault of{" "}
-            <span className="text-gradient-cyan">design resources</span>
+            The design resource vault{" "}
+            <span className="text-gradient-cyan">built for builders</span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            Trending GIFs, copy-paste UI components, and curated inspiration — 
-            all live from free APIs. No accounts. No paywalls. Just resources.
+            GIFs, copy-paste UI components, icons, stock photos, and curated inspiration —
+            all powered by live APIs. No accounts. No paywalls. Ship faster.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -44,7 +44,7 @@ const HeroSection = () => {
               className="group inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-display text-sm font-semibold text-primary-foreground transition-all hover:scale-105 glow-cyan"
             >
               <Sparkles className="h-4 w-4" />
-              Explore GIFs
+              Browse GIFs
             </a>
             <a
               href="#ui-components"
@@ -58,7 +58,7 @@ const HeroSection = () => {
               className="group inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-6 py-3 font-display text-sm font-semibold text-foreground transition-all hover:border-accent hover:bg-muted"
             >
               <Globe className="h-4 w-4 text-accent" />
-              Inspiration
+              Inspiration Feed
             </a>
           </div>
         </motion.div>

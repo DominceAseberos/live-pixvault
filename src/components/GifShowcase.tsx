@@ -150,14 +150,14 @@ const GifShowcase = () => {
           <div className="mb-4 inline-flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-accent animate-pulse-glow" />
             <span className="font-mono text-xs uppercase tracking-widest text-primary">
-              LIVE · POWERED BY REDDIT
+              Live · Powered by Reddit
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             GIFs that actually move.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Trending animations from Reddit's best GIF communities. Search any mood, vibe, or topic.
+            Trending animations pulled live from Reddit's top GIF communities. Search any mood, vibe, or topic.
           </p>
         </div>
 

@@ -107,14 +107,14 @@ const IconShowcase = () => {
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-secondary">
-              200,000+ ICONS · 150+ ICON SETS · FREE
+              200,000+ Icons · 150+ Icon Sets · Free
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             Every icon you'll ever need.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Search across Lucide, Material, Heroicons, Tabler, and more — powered by Iconify.
+            Search across Lucide, Material, Heroicons, Tabler, Phosphor, and more — powered by Iconify. Copy SVG or download instantly.
           </p>
         </div>
 

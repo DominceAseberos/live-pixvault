@@ -332,14 +332,14 @@ const UIComponents = () => {
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-secondary">
-              OPEN SOURCE · COPY-PASTE READY
+              Open Source · Copy-Paste Ready
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             Components that just work.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Live previews. One-click copy. Interactive CSS components — all free.
+            Live previews, one-click copy, interactive CSS components — all free and ready to drop into your project.
           </p>
         </div>
 

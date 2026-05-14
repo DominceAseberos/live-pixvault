@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
 
 const stats = [
-  { value: "∞", label: "GIFs via GIPHY", color: "text-primary" },
-  { value: "500+", label: "UI Components", color: "text-secondary" },
-  { value: "4", label: "Inspiration Sources", color: "text-accent" },
-  { value: "$0", label: "Forever Free", color: "text-amber-tag" },
+  { value: "200k+", label: "Icons via Iconify", color: "text-primary" },
+  { value: "35+",   label: "UI Components", color: "text-secondary" },
+  { value: "10+",   label: "Inspiration Sources", color: "text-accent" },
+  { value: "$0",    label: "No account needed", color: "text-amber-tag" },
 ];
 
 const StatsBar = () => {

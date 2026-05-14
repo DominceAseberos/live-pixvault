@@ -238,14 +238,14 @@ const InspirationFeed = () => {
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-accent">
-              UPDATED DAILY · CURATED FROM THE WEB
+              Updated Daily · Curated from the Web
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             What the best designers are reading.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Fresh web design inspiration, articles, and site showcases — auto-loaded every 24 hours.
+            Fresh articles, tutorials, and showcases from the top design and frontend publications — updated every 24 hours.
           </p>
         </div>
 
