@@ -5,18 +5,32 @@ const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
 
-const PROMPT = `You are an expert Frontend CSS UI designer. 
-Generate a SINGLE, incredibly creative HTML/CSS UI component (e.g., a button, loader, checkbox, toggle, card, input, etc.).
-You must ONLY output the raw HTML string containing inline styles or a <style> block. DO NOT include markdown backticks (e.g. \`\`\`html). DO NOT include an explanation.
-Make it modern (e.g. glassmorphism, cyberpunk, neon, minimalist, or highly animated).
-Return a JSON object exactly like this:
-{
-  "name": "Component Name",
-  "category": "Buttons",
-  "html": "<style>...</style><div>...</div>"
-}`;
+const STYLES = [
+  "Glassmorphism", "Cyberpunk", "Neumorphism", "Retro 8-bit", 
+  "Brutalist", "Minimalist", "Aurora (gradients)", "Holographic", 
+  "Skeuomorphic", "Dark Mode Neon", "Claymorphism"
+];
+
+const CATEGORIES = [
+  "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", 
+  "Toggles", "Tooltips", "Progress Bars", "Avatars", "Alerts"
+];
 
 serve(async (req) => {
+  const randomStyle = STYLES[Math.floor(Math.random() * STYLES.length)];
+  const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+
+  const PROMPT = `You are an expert Frontend CSS UI designer. 
+Generate a SINGLE, incredibly creative HTML/CSS UI component.
+You must specifically design a: ${randomCategory} using a ${randomStyle} design style.
+It must be highly unique and different from standard web components.
+You must ONLY output the raw HTML string containing inline styles or a <style> block. DO NOT include markdown backticks (e.g. \`\`\`html). DO NOT include an explanation.
+Return a JSON object exactly like this:
+{
+  "name": "Creative Name for the Component",
+  "category": "${randomCategory}",
+  "html": "<style>...</style><div>...</div>"
+}`;
   if (!GROQ_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return new Response(JSON.stringify({ error: "Missing environment variables" }), { status: 500 })
   }
