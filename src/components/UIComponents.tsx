@@ -656,7 +656,7 @@ const UIComponents = () => {
                   </>
                 ) : (
                   <div className="relative h-[296px]">
-                    <pre className="h-full overflow-auto bg-muted/80 p-4 font-mono text-[11px] text-muted-foreground leading-relaxed">
+                    <pre className="h-full overflow-y-auto whitespace-pre-wrap break-all bg-muted/80 p-4 font-mono text-[11px] text-muted-foreground leading-relaxed">
                       <code>{comp.html}</code>
                     </pre>
                     <div className="absolute bottom-3 right-3 flex gap-2">
