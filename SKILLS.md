@@ -13,7 +13,7 @@ THEME: Dark cyberpunk aesthetic with neon accents
 
 COLORS (use HSL format):
 - Background: hsl(240 20% 3.5%) - Void Black
-- Text: hsl(240 20% 96%) - Ice White
+- Text: hsla(240, 32%, 9%, 1.00) - Ice White
 - Primary: hsl(190 100% 50%) - Neon Cyan (main actions, links)
 - Secondary: hsl(263 70% 50%) - Electric Violet (secondary actions)
 - Accent: hsl(348 100% 65%) - Hot Coral (highlights, tags)

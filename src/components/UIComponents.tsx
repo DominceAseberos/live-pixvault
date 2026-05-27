@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Eye, Code2, Copy, Bookmark, ExternalLink, Search, X } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
-const CATEGORIES = ["All", "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", "Toggles", "Badges", "Alerts", "Avatars", "Tooltips", "Progress"];
+const CATEGORIES = ["All", "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", "Toggles", "Badges", "Alerts", "Avatars", "Tooltips", "Progress", "Cursors", "Errors"];
 
 interface UIComponent {
   name: string;
@@ -295,6 +296,198 @@ const COMPONENTS: UIComponent[] = [
     sourceUrl: "https://uiverse.io",
     html: `<div style="width:260px;background:#111122;border:1px solid #1e1e30;border-radius:14px;overflow:hidden;font-family:sans-serif;"><div style="padding:12px 16px;background:#1a1a2e;display:flex;align-items:center;justify-content:space-between;"><span style="font-size:12px;font-weight:700;color:#f0f0ff;">Notifications</span><span style="font-size:10px;font-weight:600;color:white;background:#FF4D6D;padding:2px 7px;border-radius:50px;">3</span></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#00d4ff);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;">A</div><div><div style="font-size:12px;font-weight:600;color:#f0f0ff;">Alex liked your post</div><div style="font-size:10px;color:#555;margin-top:2px;">2 min ago</div></div></div><div style="display:flex;gap:10px;align-items:flex-start;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF4D6D,#F59E0B);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;">B</div><div><div style="font-size:12px;font-weight:600;color:#f0f0ff;">New comment on your design</div><div style="font-size:10px;color:#555;margin-top:2px;">5 min ago</div></div></div></div></div>`,
   },
+  
+  // ── NEW COMPONENTS (SEEDED) ────────────────────────────────────────────────────────────
+  {
+    name: "Cyberpunk Button",
+    category: "Buttons",
+    author: "cyber_dev",
+    sourceUrl: "https://uiverse.io",
+    html: `<button style="position:relative;padding:16px 32px;font-size:16px;font-weight:900;text-transform:uppercase;color:#fff;background:linear-gradient(45deg,transparent 5%,#ff013c 5%);border:0;letter-spacing:3px;box-shadow:6px 0px 0px #00e6f6;outline:transparent;cursor:pointer;transition:0.2s;" onmouseover="this.style.boxShadow='2px 0px 0px #00e6f6'" onmouseout="this.style.boxShadow='6px 0px 0px #00e6f6'"><span style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg,transparent 3%,#00e6f6 3%,#00e6f6 5%,#ff013c 5%);display:none;"></span>CYBERPUNK</button>`,
+  },
+  {
+    name: "Mouse Scroll",
+    category: "Loaders",
+    author: "scroll_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>@keyframes scroll{0%{transform:translateY(0);opacity:1}100%{transform:translateY(15px);opacity:0}}</style><div style="width:30px;height:50px;border:2px solid #f0f0ff;border-radius:20px;position:relative;display:flex;justify-content:center;"><div style="width:4px;height:10px;background-color:#00d4ff;border-radius:2px;margin-top:6px;animation:scroll 2s infinite;"></div></div>`,
+  },
+  {
+    name: "Minimal Form",
+    category: "Cards",
+    author: "form_hero",
+    sourceUrl: "https://uiverse.io",
+    html: `<form style="display:flex;flex-direction:column;gap:12px;width:280px;padding:24px;background:#111122;border:1px solid #1e1e30;border-radius:16px;font-family:sans-serif;" onsubmit="event.preventDefault()"><h3 style="margin:0 0 12px;font-size:18px;color:#f0f0ff;font-weight:700;">Subscribe</h3><input type="text" placeholder="Name" style="padding:12px;background:#0F0F1A;border:1px solid #1e1e30;border-radius:8px;color:#fff;outline:none;" onfocus="this.style.borderColor='#7C3AED'" onblur="this.style.borderColor='#1e1e30'"/><input type="email" placeholder="Email" style="padding:12px;background:#0F0F1A;border:1px solid #1e1e30;border-radius:8px;color:#fff;outline:none;" onfocus="this.style.borderColor='#7C3AED'" onblur="this.style.borderColor='#1e1e30'"/><button style="padding:12px;margin-top:8px;background:#7C3AED;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Join Now</button></form>`,
+  },
+  {
+    name: "Mac Window Card",
+    category: "Cards",
+    author: "apple_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="width:300px;background:#1a1a2e;border:1px solid #333;border-radius:12px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 30px rgba(0,0,0,0.5);"><div style="background:#2a2a40;padding:8px 12px;display:flex;gap:6px;align-items:center;"><div style="width:10px;height:10px;background:#ff5f56;border-radius:50%;"></div><div style="width:10px;height:10px;background:#ffbd2e;border-radius:50%;"></div><div style="width:10px;height:10px;background:#27c93f;border-radius:50%;"></div></div><div style="padding:20px;color:#00d4ff;font-family:monospace;font-size:13px;">> npm install pixvault<br>> installing dependencies...<br>> done in 2.3s</div></div>`,
+  },
+  {
+    name: "Glowing Input",
+    category: "Inputs",
+    author: "glow_form",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="position:relative;width:260px;"><input type="text" placeholder="Enter username..." style="width:100%;padding:14px;background:#111122;border:2px solid transparent;border-radius:10px;color:#fff;outline:none;transition:0.3s;background-image:linear-gradient(#111122,#111122),linear-gradient(135deg,#7C3AED,#00d4ff);background-origin:border-box;background-clip:padding-box,border-box;" onfocus="this.style.boxShadow='0 0 15px rgba(124,58,237,0.5)'" onblur="this.style.boxShadow='none'"/></div>`,
+  },
+  {
+    name: "Animated Checkbox",
+    category: "Checkboxes",
+    author: "smooth_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<label style="display:flex;align-items:center;gap:12px;cursor:pointer;color:#fff;font-family:sans-serif;font-weight:600;"><input type="checkbox" style="appearance:none;width:24px;height:24px;border:2px solid #333;border-radius:6px;outline:none;cursor:pointer;position:relative;transition:0.3s;" onchange="this.style.background=this.checked?'#00d4ff':'transparent';this.style.borderColor=this.checked?'#00d4ff':'#333';this.nextElementSibling.style.opacity=this.checked?'1':'0';this.nextElementSibling.style.transform=this.checked?'scale(1)':'scale(0)'"/><svg style="position:absolute;width:16px;height:16px;pointer-events:none;opacity:0;transform:scale(0);transition:0.3s cubic-bezier(0.4,0,0.2,1);margin-left:4px;" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Subscribe</label>`,
+  },
+  
+  // ── CURSORS ────────────────────────────────────────────────────────────
+  {
+    name: "SVG Arrow Cursor",
+    category: "Cursors",
+    author: "cursor_lab",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>.svg-cursor { width:100%; height:150px; display:flex; align-items:center; justify-content:center; background:#1a1a2e; border:2px dashed #00d4ff; border-radius:12px; color:#f0f0ff; font-family:sans-serif; font-weight:600; cursor:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2300d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'), auto; }</style><div class="svg-cursor">Hover for SVG Cursor</div>`,
+  },
+  {
+    name: "Animated JS Dot",
+    category: "Cursors",
+    author: "motion_dev",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>.cursor-area { position: relative; width: 100%; height: 150px; background: #111122; overflow: hidden; border-radius: 12px; cursor: none; display: flex; align-items: center; justify-content: center; color: #fff; font-family: sans-serif; font-weight: bold; border: 1px solid #1e1e30; } .dot { position: absolute; width: 8px; height: 8px; background: #FF4D6D; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); transition: transform 0.1s; } .ring { position: absolute; width: 30px; height: 30px; border: 2px solid #FF4D6D; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); transition: transform 0.2s ease-out, width 0.2s, height 0.2s; } .cursor-area:hover .ring { width: 40px; height: 40px; border-color: rgba(255,77,109,0.3); background: rgba(255,77,109,0.1); }</style><div class="cursor-area" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;this.querySelector('.dot').style.left=x+'px';this.querySelector('.dot').style.top=y+'px';this.querySelector('.ring').style.left=x+'px';this.querySelector('.ring').style.top=y+'px';"><div class="dot"></div><div class="ring"></div>Interactive JS Cursor</div>`,
+  },
+  {
+    name: "Emoji Cursor",
+    category: "Cursors",
+    author: "emoji_fan",
+    sourceUrl: "https://uiverse.io",
+    html: `<style>.emoji-cursor { width:100%; height:150px; display:flex; align-items:center; justify-content:center; background:#1a1a2e; border:2px dashed #22c55e; border-radius:12px; color:#f0f0ff; font-family:sans-serif; font-weight:600; cursor:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 24px;"><text y="24">🚀</text></svg>'), auto; }</style><div class="emoji-cursor">Hover for Rocket Cursor</div>`,
+  },
+  
+  // ── MORE COMPONENTS ────────────────────────────────────────────────────────────
+  {
+    name: "Neumorphic Toggle",
+    category: "Toggles",
+    author: "neo_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .toggle { position: relative; width: 60px; height: 30px; appearance: none; background: #2a2a35; outline: none; border-radius: 20px; box-shadow: inset 4px 4px 6px -1px rgba(0, 0, 0, 0.4), inset -4px -4px 6px -1px rgba(255, 255, 255, 0.05); cursor: pointer; transition: 0.3s; } .toggle:checked { background: #7C3AED; box-shadow: inset 4px 4px 6px -1px rgba(0, 0, 0, 0.2), inset -4px -4px 6px -1px rgba(255, 255, 255, 0.1); } .toggle::before { content: ""; position: absolute; width: 22px; height: 22px; border-radius: 50%; top: 4px; left: 4px; background: #e8e8e8; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); transition: 0.3s; } .toggle:checked::before { transform: translateX(30px); } </style><input type="checkbox" class="toggle">`,
+  },
+  {
+    name: "Hypnotic Loader",
+    category: "Loaders",
+    author: "spin_master",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .spinner { width: 50px; height: 50px; border-radius: 50%; border: 4px solid transparent; border-top-color: #00d4ff; border-bottom-color: #7C3AED; animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(180deg) scale(1.2); } 100% { transform: rotate(360deg) scale(1); } } </style><div class="spinner"></div>`,
+  },
+  {
+    name: "Glass Credit Card",
+    category: "Cards",
+    author: "glassy",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="width:280px;height:160px;background:linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.0));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:16px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 8px 32px 0 rgba(0,0,0,0.37);padding:20px;display:flex;flex-direction:column;justify-content:space-between;font-family:monospace;color:#fff;"><div style="display:flex;justify-content:space-between;align-items:center;"><span>Bank of UI</span><div style="width:40px;height:25px;background:gold;border-radius:4px;opacity:0.8;"></div></div><div style="font-size:18px;letter-spacing:2px;text-shadow:0 2px 4px rgba(0,0,0,0.5);">**** **** **** 1234</div><div style="display:flex;justify-content:space-between;font-size:12px;opacity:0.8;"><span>09/28</span><span>JONATHAN DOE</span></div></div>`,
+  },
+  {
+    name: "Animated Gradient Button",
+    category: "Buttons",
+    author: "grad_guy",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .grad-btn { padding: 15px 30px; font-size: 16px; font-weight: bold; color: white; border: none; border-radius: 30px; cursor: pointer; background: linear-gradient(90deg, #ff00cc, #333399, #ff00cc); background-size: 200% auto; transition: 0.5s; } .grad-btn:hover { background-position: right center; box-shadow: 0 0 20px rgba(255, 0, 204, 0.5); } </style><button class="grad-btn">HOVER ME</button>`,
+  },
+  {
+    name: "Sleek Tooltip",
+    category: "Tooltips",
+    author: "info_box",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .tt-container { position: relative; display: inline-block; cursor: pointer; font-family: sans-serif; color: #00d4ff; font-weight: bold; padding: 10px; border: 1px dashed #00d4ff; border-radius: 8px; } .tt-text { visibility: hidden; width: 120px; background-color: #111122; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%; transform: translateX(-50%); margin-left: 0; opacity: 0; transition: opacity 0.3s; border: 1px solid #1e1e30; box-shadow: 0 4px 12px rgba(0,0,0,0.5); } .tt-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1e1e30 transparent transparent transparent; } .tt-container:hover .tt-text { visibility: visible; opacity: 1; } </style><div class="tt-container">Hover over me<span class="tt-text">Tooltip text!</span></div>`,
+  },
+  {
+    name: "Battery Charge",
+    category: "Progress",
+    author: "charge_it",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .battery { width: 80px; height: 35px; border: 3px solid #f0f0ff; border-radius: 6px; position: relative; padding: 2px; } .battery::after { content: ""; position: absolute; right: -8px; top: 8px; width: 5px; height: 13px; background: #f0f0ff; border-radius: 0 3px 3px 0; } .level { height: 100%; background: #22c55e; border-radius: 2px; width: 0%; animation: charge 3s infinite; box-shadow: 0 0 10px #22c55e; } @keyframes charge { 0% { width: 10%; background: #ef4444; box-shadow: 0 0 10px #ef4444; } 50% { width: 50%; background: #eab308; box-shadow: 0 0 10px #eab308; } 100% { width: 100%; background: #22c55e; box-shadow: 0 0 10px #22c55e; } } </style><div class="battery"><div class="level"></div></div>`,
+  },
+  
+  // ── MORE COMPONENTS BATCH 3 ────────────────────────────────────────────────────────────
+  {
+    name: "Glowing Avatar",
+    category: "Avatars",
+    author: "profile_master",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .avatar-box { position: relative; width: 64px; height: 64px; border-radius: 50%; padding: 3px; background: linear-gradient(45deg, #ff00cc, #333399, #00d4ff); animation: rotate 3s linear infinite; } .avatar-img { width: 100%; height: 100%; background: #111122; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-family: sans-serif; font-size: 24px; font-weight: bold; } @keyframes rotate { 100% { filter: hue-rotate(360deg); } } </style><div class="avatar-box"><div class="avatar-img">JD</div></div>`,
+  },
+  {
+    name: "Pulsing Badge",
+    category: "Badges",
+    author: "notif_guy",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .badge-wrapper { position: relative; display: inline-block; padding: 12px; background: #2a2a35; border-radius: 12px; border: 1px solid #333; } .badge { position: absolute; top: -6px; right: -6px; background: #FF4D6D; color: white; font-family: sans-serif; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; box-shadow: 0 0 10px #FF4D6D; animation: pulse 1.5s infinite; } @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 77, 109, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0); } } </style><div class="badge-wrapper"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><div class="badge">99+</div></div>`,
+  },
+  {
+    name: "Success Alert",
+    category: "Alerts",
+    author: "ui_medic",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .alert { display: flex; align-items: center; gap: 12px; padding: 16px 24px; background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e; border-radius: 8px; color: #f0f0ff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.2); } .alert-icon { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #22c55e; color: #111; border-radius: 50%; font-weight: bold; } </style><div class="alert"><div class="alert-icon">✓</div><div><strong>Success!</strong> Your changes have been saved.</div></div>`,
+  },
+  {
+    name: "Holographic Input",
+    category: "Inputs",
+    author: "cyber_net",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .holo-input { background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 4px; padding: 12px 16px; color: #00d4ff; font-family: monospace; font-size: 14px; width: 240px; outline: none; transition: 0.3s; box-shadow: inset 0 0 10px rgba(0, 212, 255, 0.1); } .holo-input:focus { border-color: #00d4ff; box-shadow: 0 0 15px rgba(0, 212, 255, 0.4), inset 0 0 10px rgba(0, 212, 255, 0.2); text-shadow: 0 0 5px #00d4ff; } .holo-input::placeholder { color: rgba(0, 212, 255, 0.4); } </style><input type="text" class="holo-input" placeholder="> enter commands_">`,
+  },
+  {
+    name: "Heart Like Checkbox",
+    category: "Checkboxes",
+    author: "love_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .heart-container { display: inline-block; position: relative; cursor: pointer; } .heart-container input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; } .checkmark { display: block; width: 32px; height: 32px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23555" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>') no-repeat center; transition: 0.2s; } .heart-container input:checked ~ .checkmark { background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF4D6D" stroke="%23FF4D6D" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>') no-repeat center; animation: pop 0.3s ease-in-out; } @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } } </style><label class="heart-container"><input type="checkbox"><span class="checkmark"></span></label>`,
+  },
+  {
+    name: "Glitch Text Card",
+    category: "Cards",
+    author: "error_404",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .glitch-wrapper { width: 260px; padding: 30px; background: #0a0a0a; border: 2px solid #222; text-align: center; overflow: hidden; border-radius: 8px; } .glitch-text { font-family: monospace; font-size: 32px; font-weight: bold; color: white; position: relative; display: inline-block; } .glitch-text::before, .glitch-text::after { content: "SYSTEM ERROR"; position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.8; } .glitch-text::before { color: #00d4ff; z-index: -1; animation: glitch-anim-1 2s infinite linear alternate-reverse; } .glitch-text::after { color: #ff00cc; z-index: -2; animation: glitch-anim-2 3s infinite linear alternate-reverse; } @keyframes glitch-anim-1 { 0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); } 20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); } 40% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); } 60% { clip-path: inset(80% 0 5% 0); transform: translate(2px, -2px); } 80% { clip-path: inset(10% 0 70% 0); transform: translate(-1px, 1px); } 100% { clip-path: inset(30% 0 50% 0); transform: translate(1px, -1px); } } @keyframes glitch-anim-2 { 0% { clip-path: inset(10% 0 60% 0); transform: translate(2px, -1px); } 20% { clip-path: inset(30% 0 20% 0); transform: translate(-2px, 1px); } 40% { clip-path: inset(70% 0 10% 0); transform: translate(2px, -2px); } 60% { clip-path: inset(20% 0 50% 0); transform: translate(-2px, 2px); } 80% { clip-path: inset(50% 0 30% 0); transform: translate(1px, -1px); } 100% { clip-path: inset(5% 0 80% 0); transform: translate(-1px, 1px); } } </style><div class="glitch-wrapper"><div class="glitch-text">SYSTEM ERROR</div></div>`,
+  },
+  
+  // ── ERRORS ────────────────────────────────────────────────────────────
+  {
+    name: "Neon 404",
+    category: "Errors",
+    author: "cyber_punk",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .neon-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 160px; background: #0a0a0a; border: 1px solid #111; border-radius: 12px; } .neon-text { font-family: 'Courier New', Courier, monospace; font-size: 64px; font-weight: 900; color: #fff; text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #ff00cc, 0 0 40px #ff00cc, 0 0 80px #ff00cc; animation: flicker 1.5s infinite alternate; } .neon-sub { color: #00d4ff; font-family: sans-serif; font-size: 14px; text-transform: uppercase; letter-spacing: 4px; margin-top: 10px; text-shadow: 0 0 5px #00d4ff; } @keyframes flicker { 0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #ff00cc, 0 0 40px #ff00cc, 0 0 80px #ff00cc; } 20%, 24%, 55% { text-shadow: none; } } </style><div class="neon-wrapper"><div class="neon-text">404</div><div class="neon-sub">Page Not Found</div></div>`,
+  },
+  {
+    name: "Floating 404 Ghost",
+    category: "Errors",
+    author: "spooky_ui",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .ghost-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 160px; background: #1a1a2e; border-radius: 12px; overflow: hidden; position: relative; } .ghost { width: 60px; height: 70px; background: #f0f0ff; border-radius: 30px 30px 0 0; position: relative; animation: float 3s ease-in-out infinite; box-shadow: 0 0 20px rgba(240, 240, 255, 0.4); } .ghost::before, .ghost::after { content: ""; position: absolute; top: 20px; width: 10px; height: 10px; background: #111; border-radius: 50%; } .ghost::before { left: 15px; } .ghost::after { right: 15px; } .ghost-tail { display: flex; position: absolute; bottom: -10px; width: 100%; height: 15px; } .ghost-tail span { flex: 1; background: #f0f0ff; border-radius: 0 0 10px 10px; } .ghost-tail span:nth-child(even) { background: #1a1a2e; transform: translateY(-5px); border-radius: 10px 10px 0 0; } .error-msg { margin-top: 25px; color: #f0f0ff; font-family: sans-serif; font-weight: bold; font-size: 18px; letter-spacing: 1px; } @keyframes float { 0% { transform: translateY(0); } 50% { transform: translateY(-15px); } 100% { transform: translateY(0); } } </style><div class="ghost-wrapper"><div class="ghost"><div class="ghost-tail"><span></span><span></span><span></span><span></span><span></span></div></div><div class="error-msg">404 - LOST</div></div>`,
+  },
+  {
+    name: "Terminal 404",
+    category: "Errors",
+    author: "sys_admin",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .term-404 { width: 100%; height: 160px; background: #000; border-radius: 8px; padding: 15px; font-family: monospace; color: #0f0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-start; } .term-404 p { margin: 0 0 8px 0; padding: 0; font-size: 14px; line-height: 1.2; } .cursor { display: inline-block; width: 8px; height: 15px; background: #0f0; animation: blink 1s step-end infinite; } @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } } </style><div class="term-404"><p>> sudo locate missing_page</p><p>> locating...</p><p style="color: #f00;">> ERROR 404: Page Not Found.</p><p>> root@server:~$ <span class="cursor"></span></p></div>`,
+  },
+  {
+    name: "TV Static 404",
+    category: "Errors",
+    author: "retro_tv",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .static-wrapper { position: relative; width: 100%; height: 160px; background: #000; overflow: hidden; border-radius: 8px; border: 2px solid #333; display: flex; align-items: center; justify-content: center; } .static-wrapper::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px); z-index: 2; pointer-events: none; } .static-bg { position: absolute; width: 200%; height: 200%; top: -50%; left: -50%; background-image: repeating-radial-gradient(circle at 50% 50%, #000 0%, #000 1px, transparent 2px, transparent 3px), repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 2px, transparent 3px); animation: static 0.1s infinite linear; opacity: 0.15; z-index: 1; } .static-text { position: relative; z-index: 3; color: white; font-family: sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2px; text-shadow: 2px 2px 0px #f00, -2px -2px 0px #0ff; animation: glitch 2s infinite alternate; } @keyframes static { 0% { transform: translate(0,0); } 100% { transform: translate(5px, 5px); } } @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-2px, 1px); } 40% { transform: translate(2px, -1px); } 60% { transform: translate(-1px, 2px); } 80% { transform: translate(1px, -2px); } 100% { transform: translate(0); } } </style><div class="static-wrapper"><div class="static-bg"></div><div class="static-text">NO SIGNAL</div></div>`,
+  },
+  {
+    name: "Bouncing DVD 404",
+    category: "Errors",
+    author: "dvd_hero",
+    sourceUrl: "https://uiverse.io",
+    html: `<style> .dvd-wrapper { width: 100%; height: 160px; background: #111; border-radius: 8px; position: relative; overflow: hidden; } .dvd-logo { position: absolute; width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; color: #ff00cc; font-family: sans-serif; font-weight: 900; font-size: 16px; border: 2px solid currentColor; border-radius: 4px; animation: bounceX 3s linear infinite alternate, bounceY 2s linear infinite alternate, colorCycle 10s infinite linear; } @keyframes bounceX { from { left: 0; } to { left: calc(100% - 60px); } } @keyframes bounceY { from { top: 0; } to { top: calc(100% - 30px); } } @keyframes colorCycle { 0% { color: #ff00cc; } 25% { color: #00d4ff; } 50% { color: #22c55e; } 75% { color: #eab308; } 100% { color: #ff00cc; } } </style><div class="dvd-wrapper"><div class="dvd-logo">404</div></div>`,
+  }
 ];
 
 const IFRAME_STYLE = `<!DOCTYPE html><html><head><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
@@ -304,14 +497,50 @@ const UIComponents = () => {
   const [search, setSearch] = useState("");
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
   const [savedComponents, setSavedComponents] = useState<Set<string>>(new Set());
+  const [dbComponents, setDbComponents] = useState<UIComponent[]>([]);
+  
+  const ITEMS_PER_PAGE = 9;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    async function fetchAIComponents() {
+      try {
+        const { data, error } = await supabase.from('components').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          const formatted = data.map((d: any) => ({
+            name: d.name,
+            category: d.category,
+            author: d.author,
+            sourceUrl: d.source_url,
+            html: d.html
+          }));
+          setDbComponents(formatted);
+        }
+      } catch (err) {
+        console.error("Failed to fetch DB components:", err);
+      }
+    }
+    fetchAIComponents();
+  }, []);
+
+  const allComponents = useMemo(() => {
+    return [...dbComponents, ...COMPONENTS];
+  }, [dbComponents]);
 
   const filtered = useMemo(() => {
-    return COMPONENTS.filter(c => {
+    return allComponents.filter(c => {
       const matchCat = activeCategory === "All" || c.category.toLowerCase() === activeCategory.toLowerCase();
       const matchSearch = search === "" || c.name.toLowerCase().includes(search.toLowerCase()) || c.category.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
+  }, [activeCategory, search, allComponents]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [activeCategory, search]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedComponents = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const toggleFlip = (name: string) => {
     setFlippedCards(prev => {
@@ -384,7 +613,7 @@ const UIComponents = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((comp, i) => {
+          {paginatedComponents.map((comp, i) => {
             const isFlipped = flippedCards.has(comp.name);
             return (
               <motion.div key={comp.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -445,6 +674,29 @@ const UIComponents = () => {
             );
           })}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="mt-12 flex justify-center items-center gap-4">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 text-sm font-medium border border-border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted text-foreground"
+            >
+              Previous
+            </button>
+            <span className="font-mono text-xs text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 text-sm font-medium border border-border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted text-foreground"
+            >
+              Next
+            </button>
+          </div>
+        )}
 
         {/* Empty state */}
         {filtered.length === 0 && (
