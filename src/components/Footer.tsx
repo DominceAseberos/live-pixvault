@@ -6,9 +6,7 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <Zap className="h-3.5 w-3.5 text-primary-foreground" />
-            </div>
+            <img src="/logo.png" alt="PIXVAULT Logo" className="h-7 w-7 object-contain rounded-md" />
             <span className="font-display text-lg font-bold text-foreground">
               PIX<span className="text-primary">VAULT</span>
             </span>

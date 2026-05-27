@@ -14,7 +14,7 @@ interface UIComponent {
   sourceUrl: string;
 }
 
-const COMPONENTS: UIComponent[] = [
+export const COMPONENTS: UIComponent[] = [
   // ── BUTTONS ──────────────────────────────────────────────────────────────
   {
     name: "Neon Glow Button",
@@ -615,8 +615,9 @@ const UIComponents = () => {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedComponents.map((comp, i) => {
             const isFlipped = flippedCards.has(comp.name);
+            const uniqueKey = comp.name + "-" + comp.author;
             return (
-              <motion.div key={comp.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              <motion.div key={uniqueKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }} className="overflow-hidden rounded-lg border border-border bg-card card-hover-violet">
                 {!isFlipped ? (
                   <>

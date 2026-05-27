@@ -13,27 +13,41 @@ const STYLES = [
 
 const CATEGORIES = [
   "Buttons", "Cards", "Inputs", "Loaders", "Checkboxes", 
-  "Toggles", "Tooltips", "Progress Bars", "Avatars", "Alerts"
+  "Toggles", "Badges", "Alerts", "Avatars", "Tooltips", 
+  "Progress", "Cursors", "Errors"
 ];
 
 serve(async (req) => {
+  if (!GROQ_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return new Response(JSON.stringify({ error: "Missing environment variables" }), { status: 500 })
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  // 1. Fetch recent components to avoid duplicates
+  const { data: recent } = await supabase.from('components').select('name').order('created_at', { ascending: false }).limit(30);
+  const recentNames = recent ? recent.map((r: any) => r.name).join(", ") : "";
+
   const randomStyle = STYLES[Math.floor(Math.random() * STYLES.length)];
   const randomCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
 
   const PROMPT = `You are an expert Frontend CSS UI designer. 
 Generate a SINGLE, incredibly creative HTML/CSS UI component.
 You must specifically design a: ${randomCategory} using a ${randomStyle} design style.
-It must be highly unique and different from standard web components.
-You must ONLY output the raw HTML string containing inline styles or a <style> block. DO NOT include markdown backticks (e.g. \`\`\`html). DO NOT include an explanation.
+
+STRICT CONSTRAINTS:
+1. It must be highly unique and different from standard web components.
+2. DO NOT generate anything similar to these recently generated components: ${recentNames}. Invent a completely new concept.
+3. FIT INSIDE THE BOX: The component MUST be responsive and fit perfectly within a 300px by 200px container. Do not use fixed absolute positioning that breaks out of the container. 
+4. CORRECT HTML TAGS: If the category is "Buttons", you MUST output a <button>. If it is "Inputs", you MUST output an <input>. Match the HTML semantics to the requested category "${randomCategory}".
+5. You must ONLY output the raw HTML string containing inline styles or a <style> block. DO NOT include markdown backticks (e.g. \`\`\`html). DO NOT include an explanation.
+
 Return a JSON object exactly like this:
 {
   "name": "Creative Name for the Component",
   "category": "${randomCategory}",
   "html": "<style>...</style><div>...</div>"
 }`;
-  if (!GROQ_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return new Response(JSON.stringify({ error: "Missing environment variables" }), { status: 500 })
-  }
 
   try {
     // 2. Call Groq
@@ -63,7 +77,6 @@ Return a JSON object exactly like this:
     }
 
     // 3. Save to Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     
     const { error: dbError } = await supabase
       .from('components')

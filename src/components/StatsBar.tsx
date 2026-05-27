@@ -1,13 +1,31 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-
-const stats = [
-  { value: "200k+", label: "Icons via Iconify", color: "text-primary" },
-  { value: "35+",   label: "UI Components", color: "text-secondary" },
-  { value: "10+",   label: "Inspiration Sources", color: "text-accent" },
-  { value: "$0",    label: "No account needed", color: "text-amber-tag" },
-];
+import { supabase } from "@/lib/supabase";
+import { COMPONENTS } from "@/components/UIComponents";
 
 const StatsBar = () => {
+  const [componentCount, setComponentCount] = useState(COMPONENTS.length);
+
+  useEffect(() => {
+    async function getCount() {
+      const { count, error } = await supabase
+        .from('components')
+        .select('*', { count: 'exact', head: true });
+        
+      if (!error && count !== null) {
+        setComponentCount(COMPONENTS.length + count);
+      }
+    }
+    getCount();
+  }, []);
+
+  const stats = [
+    { value: "200k+", label: "Icons via Iconify", color: "text-primary" },
+    { value: `${componentCount}+`,   label: "UI Components", color: "text-secondary" },
+    { value: "10+",   label: "Inspiration Layouts", color: "text-accent" },
+    { value: "$0",    label: "No account needed", color: "text-amber-tag" },
+  ];
+
   return (
     <section className="border-y border-border bg-muted/30">
       <div className="container mx-auto px-4 py-8">
