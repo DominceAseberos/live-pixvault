@@ -343,25 +343,25 @@ export const COMPONENTS: UIComponent[] = [
   
   // ── CURSORS ────────────────────────────────────────────────────────────
   {
-    name: "SVG Arrow Cursor",
+    name: "JS Dot Cursor",
     category: "Cursors",
     author: "cursor_lab",
     sourceUrl: "https://uiverse.io",
-    html: `<style>.svg-cursor { width:100%; height:150px; display:flex; align-items:center; justify-content:center; background:#1a1a2e; border:2px dashed #00d4ff; border-radius:12px; color:#f0f0ff; font-family:sans-serif; font-weight:600; cursor:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2300d4ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'), auto; }</style><div class="svg-cursor">Hover for SVG Cursor</div>`,
+    html: `<div style="position:relative;width:100%;height:150px;background:#111122;overflow:hidden;border-radius:12px;cursor:none;display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:bold;border:1px solid #1e1e30;user-select:none;" onmousemove="const r=this.getBoundingClientRect();const x=event.clientX-r.left;const y=event.clientY-r.top;this.children[0].style.left=x+'px';this.children[0].style.top=y+'px';this.children[1].style.left=x+'px';this.children[1].style.top=y+'px';" onmouseenter="this.children[0].style.opacity='1';this.children[1].style.opacity='1';" onmouseleave="this.children[0].style.opacity='0';this.children[1].style.opacity='0';"><div style="position:absolute;width:8px;height:8px;background:#FF4D6D;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);transition:left 0.05s,top 0.05s;opacity:0;"></div><div style="position:absolute;width:32px;height:32px;border:2px solid #FF4D6D;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);transition:left 0.12s,top 0.12s;opacity:0;"></div>Move mouse here</div>`,
   },
   {
-    name: "Animated JS Dot",
-    category: "Cursors",
-    author: "motion_dev",
-    sourceUrl: "https://uiverse.io",
-    html: `<style>.cursor-area { position: relative; width: 100%; height: 150px; background: #111122; overflow: hidden; border-radius: 12px; cursor: none; display: flex; align-items: center; justify-content: center; color: #fff; font-family: sans-serif; font-weight: bold; border: 1px solid #1e1e30; } .dot { position: absolute; width: 8px; height: 8px; background: #FF4D6D; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); transition: transform 0.1s; } .ring { position: absolute; width: 30px; height: 30px; border: 2px solid #FF4D6D; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); transition: transform 0.2s ease-out, width 0.2s, height 0.2s; } .cursor-area:hover .ring { width: 40px; height: 40px; border-color: rgba(255,77,109,0.3); background: rgba(255,77,109,0.1); }</style><div class="cursor-area" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;this.querySelector('.dot').style.left=x+'px';this.querySelector('.dot').style.top=y+'px';this.querySelector('.ring').style.left=x+'px';this.querySelector('.ring').style.top=y+'px';"><div class="dot"></div><div class="ring"></div>Interactive JS Cursor</div>`,
-  },
-  {
-    name: "Emoji Cursor",
+    name: "Rocket Emoji Cursor",
     category: "Cursors",
     author: "emoji_fan",
     sourceUrl: "https://uiverse.io",
-    html: `<style>.emoji-cursor { width:100%; height:150px; display:flex; align-items:center; justify-content:center; background:#1a1a2e; border:2px dashed #22c55e; border-radius:12px; color:#f0f0ff; font-family:sans-serif; font-weight:600; cursor:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 24px;"><text y="24">🚀</text></svg>'), auto; }</style><div class="emoji-cursor">Hover for Rocket Cursor</div>`,
+    html: `<div style="position:relative;width:100%;height:150px;background:#1a1a2e;overflow:hidden;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#f0f0ff;font-family:sans-serif;font-weight:600;border:2px dashed #22c55e;cursor:none;user-select:none;" onmousemove="const r=this.getBoundingClientRect();const el=this.querySelector('#rkt');el.style.left=(event.clientX-r.left)+'px';el.style.top=(event.clientY-r.top)+'px';el.style.opacity='1';" onmouseleave="this.querySelector('#rkt').style.opacity='0';"><span id="rkt" style="position:absolute;font-size:20px;pointer-events:none;transform:translate(-50%,-50%);transition:left 0.05s,top 0.05s;opacity:0;">🚀</span>Hover for Rocket Cursor</div>`,
+  },
+  {
+    name: "Glow Trail Cursor",
+    category: "Cursors",
+    author: "motion_dev",
+    sourceUrl: "https://uiverse.io",
+    html: `<div style="position:relative;width:100%;height:150px;background:#0a0a14;overflow:hidden;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#888;font-family:sans-serif;font-size:13px;cursor:none;user-select:none;border:1px solid #1e1e30;" onmousemove="const r=this.getBoundingClientRect();const x=event.clientX-r.left;const y=event.clientY-r.top;const c=this.querySelector('#glwc');c.style.left=x+'px';c.style.top=y+'px';c.style.opacity='1';" onmouseleave="this.querySelector('#glwc').style.opacity='0';"><div id="glwc" style="position:absolute;width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,#00d4ff,transparent);box-shadow:0 0 20px 8px #00d4ff60;pointer-events:none;transform:translate(-50%,-50%);transition:left 0.08s,top 0.08s;opacity:0;"></div>Glow Trail ✦</div>`,
   },
   
   // ── MORE COMPONENTS ────────────────────────────────────────────────────────────
@@ -490,7 +490,7 @@ export const COMPONENTS: UIComponent[] = [
   }
 ];
 
-const IFRAME_STYLE = `<!DOCTYPE html><html><head><base href="about:blank"><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"><\/script><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
+const IFRAME_STYLE = `<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"><\/script><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
 
 const UIComponents = () => {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -618,7 +618,7 @@ const UIComponents = () => {
             const uniqueKey = comp.name + "-" + comp.author;
             return (
               <motion.div key={uniqueKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }} className="overflow-hidden rounded-lg border border-border bg-card card-hover-violet">
+                transition={{ delay: i * 0.05 }} className="overflow-hidden rounded-lg border border-border bg-card card-hover-violet cursor-pointer">
                 {!isFlipped ? (
                   <>
                     <div className="h-[180px] overflow-hidden">
