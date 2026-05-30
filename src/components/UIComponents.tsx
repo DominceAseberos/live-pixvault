@@ -490,7 +490,7 @@ export const COMPONENTS: UIComponent[] = [
   }
 ];
 
-const IFRAME_STYLE = `<!DOCTYPE html><html><head><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
+const IFRAME_STYLE = `<!DOCTYPE html><html><head><base href="about:blank"><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"><\/script><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
 
 const UIComponents = () => {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -625,7 +625,7 @@ const UIComponents = () => {
                       <iframe
                         srcDoc={`${IFRAME_STYLE}${comp.html}</body></html>`}
                         className="h-full w-full border-0"
-                        sandbox="allow-scripts"
+                        sandbox="allow-scripts allow-same-origin"
                         title={comp.name}
                         loading="lazy"
                       />
