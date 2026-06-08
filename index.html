@@ -13,6 +13,43 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+    <script>
+      let isSyncing = false;
+      let syncTimeout;
+      window.addEventListener('scroll', () => {
+        if (isSyncing || window.parent === window) return;
+        const sh = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollPercentage = sh > 0 ? window.scrollY / sh : 0;
+        window.parent.postMessage({ type: 'SYNC_STATE', payload: { scrollPercentage, url: window.location.pathname } }, '*');
+      }, { passive: true });
+      const originalPushState = history.pushState;
+      history.pushState = function() {
+        originalPushState.apply(this, arguments);
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'SYNC_STATE', payload: { url: window.location.pathname } }, '*');
+        }
+      };
+      window.addEventListener('popstate', () => {
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'SYNC_STATE', payload: { url: window.location.pathname } }, '*');
+        }
+      });
+      window.addEventListener('message', (e) => {
+        if (!e.data || e.data.type !== 'UPDATE_STATE') return;
+        if (e.data.payload.url && e.data.payload.url !== window.location.pathname) {
+          window.location.pathname = e.data.payload.url;
+          return;
+        }
+        if (e.data.payload.scrollPercentage !== undefined) {
+          isSyncing = true;
+          clearTimeout(syncTimeout);
+          const targetY = e.data.payload.scrollPercentage * (document.documentElement.scrollHeight - window.innerHeight);
+          window.scrollTo({ top: targetY, behavior: 'instant' });
+          syncTimeout = setTimeout(() => { isSyncing = false; }, 100);
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
