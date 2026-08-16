@@ -1,17 +1,3 @@
-import Navbar from "@/components/Navbar";
+import { PageShell } from "@/components/PageShell";
 import InspirationFeed from "@/components/InspirationFeed";
-import Footer from "@/components/Footer";
-
-const Inspiration = () => {
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
-      <main className="flex-1 pt-16">
-        <InspirationFeed />
-      </main>
-      <Footer />
-    </div>
-  );
-};
-
-export default Inspiration;
+export default function Inspiration() { return <PageShell><InspirationFeed /></PageShell>; }

@@ -1,422 +1,505 @@
-# PIXVAULT — Project Documentation
+# PIXVAULT Engineering Documentation
 
-**Version:** 1.0.0
-**Status:** Live
-**Live URL:** [live-pixvault.vercel.app](https://live-pixvault.vercel.app)
-**Repository:** [github.com/DominceAseberos/live-pixvault](https://github.com/DominceAseberos/live-pixvault)
-**Author:** Domince Aseberos
-**Last Updated:** May 2026
+**System:** PIXVAULT (`live-pixvault`)
+**Architecture baseline:** 2026-08-16
+**Runtime model:** client-rendered React SPA + external read APIs + Supabase database/Edge Function
+**Primary design goal:** a fast, resilient, account-free resource vault for UI assets and frontend inspiration.
 
 ---
 
-## Table of Contents
+## 1. Executive summary
 
-1. [Project Overview](#1-project-overview)
-2. [Problem Statement](#2-problem-statement)
-3. [Solution](#3-solution)
-4. [Features](#4-features)
-5. [System Architecture](#5-system-architecture)
-6. [Technology Stack](#6-technology-stack)
-7. [External APIs & Data Sources](#7-external-apis--data-sources)
-8. [Application Flow](#8-application-flow)
-9. [Component Breakdown](#9-component-breakdown)
-10. [Known Limitations](#10-known-limitations)
-11. [Future Improvements](#11-future-improvements)
-12. [Lessons Learned](#12-lessons-learned)
+PIXVAULT is not a textbook server-rendered MVC application. It is better modeled as a **feature-oriented React SPA with layered separation of concerns**:
 
----
+- **Routes/pages** compose feature screens.
+- **Feature components** own presentation and short-lived interaction state.
+- **Hooks** own reusable client-state behavior such as debouncing and persistent sets.
+- **Services** own reusable remote I/O for Supabase, Iconify, Picsum, and generic HTTP behavior.
+- **Data modules** own curated static catalog content.
+- **Supabase** owns persistent generated components and the trusted AI-generation write path.
+- **App providers** own cross-cutting concerns: routing, query cache, tooltips, toast surfaces, reduced-motion behavior, and global render recovery.
 
-## 1. Project Overview
+This is intentionally not forced into classic MVC terminology. For a React SPA, the current split gives stronger separation of concerns without adding artificial controller classes.
 
-**PIXVAULT** is a free, open-source web application that aggregates design resources from multiple public APIs into a single, unified interface. It provides designers and frontend developers with instant access to trending GIFs, copy-paste UI components, SVG icons, stock photography, and curated design articles — all without requiring an account, API key, or payment.
+### Architecture assessment
 
-The application is built as a Single Page Application (SPA) using React and TypeScript, deployed on Vercel, and powered entirely by free public APIs.
-
-> **Core Principle:** Everything in PIXVAULT is free, live, and requires zero setup from the user.
-
----
-
-## 2. Problem Statement
-
-Designers and developers frequently need access to a variety of resources during their workflow:
-
-- Animated GIFs for mockups, presentations, or UI feedback states
-- Ready-made UI components to prototype quickly
-- SVG icons that match their design system
-- Stock photography for layouts and wireframes
-- Design articles and inspiration to stay current
-
-The problem is that these resources are **scattered across dozens of different platforms**, many of which require account registration, API keys, or paid subscriptions. Switching between tools breaks focus and slows down the creative process.
-
-**PIXVAULT solves this by consolidating everything into one place.**
+| Area | Before hardening | Current baseline |
+| --- | --- | --- |
+| Route composition | Repeated page chrome | Shared `PageShell`, lazy routes |
+| Server state | Ad-hoc fetches despite Query provider | React Query for component and icon server state; abortable fetches elsewhere |
+| Static catalog | Mixed into a large controller/view file | Extracted to `src/data/componentCatalog.ts` |
+| Supabase access | Client creation with empty-string fallback | Optional safe configuration + service boundary |
+| Saved items | Memory-only Sets | `localStorage` persistence through `usePersistentSet` |
+| Search | Manual timers / stale-request risk | Debounce hook and request cancellation where applicable |
+| Clipboard/downloads | Fire-and-forget | Guarded errors and user feedback |
+| Generated preview isolation | `allow-scripts allow-same-origin` | sandbox reduced to `allow-scripts` |
+| Generated DB writes | Anonymous direct insert policy | public writes revoked; service-role Edge Function only |
+| Global failures | No render boundary | `AppErrorBoundary` recovery |
+| Accessibility | Hover-heavy, inconsistent focus | visible focus ring, touch-friendly actions, reduced-motion support, ARIA improvements |
+| Dependency security | Audit findings | `npm audit` = 0 vulnerabilities |
+| Initial bundle | ~843 KB monolithic route bundle | ~361 KB initial app chunk + lazy feature chunks |
 
 ---
 
-## 3. Solution
+## 2. Route map
 
-PIXVAULT acts as a **resource aggregator** — it does not store any content itself. Instead, it fetches data in real time from trusted public APIs and presents it through a clean, consistent interface.
+```mermaid
+flowchart LR
+  Browser --> Router[React Router]
+  Router --> Home["/"]
+  Router --> Components["/components"]
+  Router --> Gifs["/gifs"]
+  Router --> Icons["/icons"]
+  Router --> Photos["/photos"]
+  Router --> Inspiration["/inspiration"]
+  Router --> Missing["* / 404"]
 
-Key design decisions:
-
-- **No backend required** — all data is fetched client-side from public APIs
-- **No authentication** — users can access everything immediately
-- **No storage** — content is fetched live; session-level caching reduces redundant requests
-- **No cost** — the application and all its data sources are free
-
----
-
-## 4. Features
-
-### 4.1 GIF Library
-- Fetches trending GIFs live from Reddit's public JSON API
-- Supports search across multiple subreddits (`r/gifs`, `r/reactiongifs`, `r/HighQualityGifs`, `r/animatedpixelart`)
-- Masonry grid layout with lazy loading
-- One-click URL copy and bookmark functionality
-- Pagination with "Load More" support
-- Debounced search input (500ms) to reduce API calls
-
-### 4.2 UI Component Library
-- 35+ hand-crafted CSS/HTML components across 12 categories
-- Categories: Buttons, Cards, Inputs, Loaders, Checkboxes, Toggles, Badges, Alerts, Avatars, Tooltips, Progress
-- Live interactive previews rendered in sandboxed iframes
-- One-click HTML copy
-- Code view toggle (preview ↔ source)
-- Real-time search by component name or category
-- Result count indicator
-
-### 4.3 Icon Search
-- Searches 200,000+ icons across 150+ icon sets via the Iconify API
-- Supported sets: Lucide, Material Design Icons, Heroicons, Tabler, Phosphor, Feather
-- Quick-tag shortcuts for common searches
-- Copy SVG source to clipboard
-- Download SVG file directly
-- Debounced search with set filtering
-
-### 4.4 Photo Gallery
-- Fetches high-quality stock photos from Lorem Picsum (Unsplash photographers)
-- Masonry layout with responsive columns
-- Shuffle button for random collections
-- Copy image URL (full resolution 1920×1080)
-- Download image directly
-- Pagination with "Load More"
-- No attribution required
-
-### 4.5 Inspiration Feed
-- Aggregates articles from 10 sources:
-  - CSS-Tricks
-  - Smashing Magazine
-  - Awwwards
-  - Codrops
-  - Dev.to (Web Dev tag)
-  - web.dev (Google)
-  - A List Apart
-  - UX Collective
-  - Hacker News (Design/Frontend stories via Algolia)
-  - GitHub Trending (Frontend/UI repositories)
-- Featured article card with full-width layout
-- Article type classification (Tutorial, Showcase, Article)
-- Relative timestamps ("2h ago", "Yesterday")
-- Bookmark/save articles locally
-- Session-level caching (6-hour TTL) to avoid rate limits
-
----
-
-## 5. System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User's Browser                          │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    React SPA (Vite)                       │  │
-│  │                                                           │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐  │  │
-│  │  │   GIF    │  │   UI     │  │  Icons   │  │ Photos  │  │  │
-│  │  │ Showcase │  │Components│  │ Showcase │  │ Gallery │  │  │
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬────┘  │  │
-│  │       │             │             │              │        │  │
-│  │  ┌────▼─────────────▼─────────────▼──────────────▼────┐  │  │
-│  │  │              Session Cache (sessionStorage)         │  │  │
-│  │  └────┬─────────────┬─────────────┬──────────────┬────┘  │  │
-│  └───────┼─────────────┼─────────────┼──────────────┼───────┘  │
-└──────────┼─────────────┼─────────────┼──────────────┼──────────┘
-           │             │             │              │
-    ┌──────▼──┐   ┌──────▼──┐  ┌──────▼──┐   ┌──────▼──────┐
-    │ Reddit  │   │Iconify  │  │ Picsum  │   │ RSS2JSON /  │
-    │  API    │   │  API    │  │  API    │   │ HN Algolia  │
-    └─────────┘   └─────────┘  └─────────┘   └─────────────┘
+  Home --> Story[Hero / Storyboard / Stats]
+  Components --> Catalog[Curated catalog + Supabase generated items]
+  Gifs --> Reddit[Reddit JSON endpoints]
+  Icons --> Iconify[Iconify API]
+  Photos --> Picsum[Picsum API]
+  Inspiration --> Feeds[RSS2JSON / HN / GitHub]
 ```
 
-### Data Flow
-
-1. User opens the application in a browser
-2. React renders the UI shell immediately (no loading delay)
-3. Each section fetches its data independently on mount
-4. Session cache is checked first — if valid data exists, no API call is made
-5. Fetched data is rendered progressively with skeleton loaders during fetch
-6. User interactions (search, filter, paginate) trigger new fetches with debouncing
+All route modules are lazy-loaded with `React.lazy` and `Suspense`. The command menu (`Ctrl/Cmd + K`) provides global navigation.
 
 ---
 
-## 6. Technology Stack
+## 3. Current file structure
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| UI Framework | React | 18.3.1 | Component-based UI |
-| Language | TypeScript | 5.8.3 | Type safety |
-| Build Tool | Vite | 5.4.19 | Fast dev server & bundler |
-| Styling | Tailwind CSS | 3.4.17 | Utility-first CSS |
-| UI Primitives | Radix UI / shadcn | Various | Accessible components |
-| State Management | React useState / useMemo | — | Local component state |
-| Server State | TanStack Query | 5.83.0 | (Available, not yet used for all fetches) |
-| Animations | Framer Motion | 12.35.1 | Page and component animations |
-| Routing | React Router | 6.30.1 | Client-side routing |
-| Icons | Lucide React | 0.462.0 | UI icons |
-| Notifications | Sonner | 1.7.4 | Toast notifications |
-| Testing | Vitest + Testing Library | 3.2.4 | Unit tests |
-| Deployment | Vercel | — | Hosting & CI/CD |
-
----
-
-## 7. External APIs & Data Sources
-
-All APIs used are free and require no authentication key from the end user.
-
-### 7.1 Reddit JSON API
-- **Endpoint:** `https://www.reddit.com/r/{subreddit}/hot.json`
-- **Used for:** GIF Library
-- **Auth required:** No
-- **Rate limit:** ~60 requests/minute per IP (unauthenticated)
-- **Notes:** Reddit's public JSON API is unofficial and subject to change. No API key needed for read-only access.
-
-### 7.2 Iconify API
-- **Endpoint:** `https://api.iconify.design/search?query={q}`
-- **Used for:** Icon Search
-- **Auth required:** No
-- **Rate limit:** Not publicly documented; generous for normal usage
-- **Notes:** Returns icon metadata. SVG files are fetched individually per icon on demand.
-
-### 7.3 Lorem Picsum
-- **Endpoint:** `https://picsum.photos/v2/list?page={n}&limit={n}`
-- **Used for:** Photo Gallery
-- **Auth required:** No
-- **Rate limit:** None documented
-- **Notes:** Photos are sourced from Unsplash photographers. No attribution required per Picsum's terms.
-
-### 7.4 RSS2JSON
-- **Endpoint:** `https://api.rss2json.com/v1/api.json?rss_url={url}`
-- **Used for:** Inspiration Feed (RSS sources)
-- **Auth required:** No (free tier)
-- **Rate limit:** 10,000 requests/day on free tier
-- **Notes:** Converts RSS/Atom feeds to JSON. Free tier has a daily request cap.
-
-### 7.5 HN Algolia API
-- **Endpoint:** `https://hn.algolia.com/api/v1/search?tags=story&query={q}`
-- **Used for:** Inspiration Feed (Hacker News tab)
-- **Auth required:** No
-- **Rate limit:** Not publicly documented; generous
-- **Notes:** Official Hacker News search API provided by Algolia.
-
-### 7.6 GitHub REST API
-- **Endpoint:** `https://api.github.com/search/repositories?q=topic:frontend`
-- **Used for:** Inspiration Feed (GitHub Trending tab)
-- **Auth required:** No (public endpoints)
-- **Rate limit:** 60 requests/hour (unauthenticated)
-- **Notes:** Returns public repository data. Rate limit is per IP address.
-
----
-
-## 8. Application Flow
-
-### Initial Load
-```
-Browser opens URL
-       ↓
-Vite serves index.html + JS bundle
-       ↓
-React mounts App component
-       ↓
-Providers initialize (QueryClient, TooltipProvider, Router)
-       ↓
-Index page renders all section components
-       ↓
-Each component fires its own useEffect → fetch data
-       ↓
-Skeleton loaders shown during fetch
-       ↓
-Data renders progressively as each fetch completes
-```
-
-### Search Flow (GIF / Icon)
-```
-User types in search input
-       ↓
-Debounce timer starts (400–500ms)
-       ↓
-Timer resets on each keystroke
-       ↓
-Timer completes → API call fires
-       ↓
-Loading state shown
-       ↓
-Results replace current content
-```
-
-### Caching Flow (Inspiration Feed)
-```
-User clicks a source tab
-       ↓
-Check sessionStorage for cached data
-       ↓
-Cache hit (< 6 hours old) → render immediately
-Cache miss → fetch from API → store in sessionStorage → render
-```
-
----
-
-## 9. Component Breakdown
-
-| Component | File | Data Source | Key Features |
-|-----------|------|-------------|--------------|
-| Navbar | `Navbar.tsx` | Static | Responsive, mobile menu, smooth scroll links |
-| HeroSection | `HeroSection.tsx` | Static | Animated entrance, CTA buttons, background effects |
-| StatsBar | `StatsBar.tsx` | Static | Animated counters on scroll |
-| GifShowcase | `GifShowcase.tsx` | Reddit API | Search, subreddit tabs, masonry grid, pagination |
-| UIComponents | `UIComponents.tsx` | Static (embedded) | Search, category filter, iframe previews, code copy |
-| IconShowcase | `IconShowcase.tsx` | Iconify API | Search, set filter, SVG copy/download |
-| IllustrationGallery | `IllustrationGallery.tsx` | Picsum API | Masonry grid, shuffle, URL copy, download |
-| InspirationFeed | `InspirationFeed.tsx` | RSS2JSON / HN / GitHub | 10 sources, session cache, bookmarks |
-| Footer | `Footer.tsx` | Static | API credits, GitHub link |
-
----
-
-## 10. Known Limitations
-
-### API Constraints
-
-| Limitation | Impact | Affected Feature |
-|------------|--------|-----------------|
-| Reddit API is unofficial and unauthenticated | May break without notice; rate limited at ~60 req/min | GIF Library |
-| RSS2JSON free tier caps at 10,000 req/day | High traffic could exhaust the daily quota | Inspiration Feed |
-| GitHub API limited to 60 req/hour (unauthenticated) | Frequent page refreshes may hit the limit | GitHub Trending tab |
-| Iconify SVG fetches are per-icon | Loading 48 icons = 48 individual HTTP requests | Icon Search |
-| Lorem Picsum has no search/filter | Cannot search photos by keyword or category | Photo Gallery |
-
-### Application Constraints
-
-- **No user accounts** — bookmarks and saved items are stored in component state only and are lost on page refresh
-- **No persistent storage** — session cache clears when the browser tab is closed
-- **No offline support** — the application requires an active internet connection for all content
-- **CORS dependency** — all API calls are made client-side; any API that blocks browser CORS requests will fail silently
-- **Single page** — all content loads on one route; deep linking to specific sections is not supported
-- **No dark/light mode toggle** — the application is dark-mode only by design
-
-### Content Constraints
-
-- GIF content is sourced from Reddit and is not moderated by PIXVAULT
-- Inspiration feed articles are fetched as-is from third-party RSS feeds; content accuracy is not guaranteed
-- Stock photos are served by Lorem Picsum; availability depends on their uptime
-
----
-
-## 11. Future Improvements
-
-The following features are identified as high-value additions for future versions:
-
-### Short Term
-- [ ] Persist bookmarks to `localStorage` so they survive page refresh
-- [ ] Add a "Saved" tab that shows all bookmarked items across sections
-- [ ] Add keyword search to the Photo Gallery using a different API (e.g., Pexels)
-- [ ] Add copy-as-React and copy-as-Tailwind options to UI Components
-- [ ] Improve mobile layout for the Inspiration Feed
-
-### Medium Term
-- [ ] Add user authentication (optional) to sync bookmarks across devices
-- [ ] Add a "Collections" feature to group saved resources
-- [ ] Integrate Pexels or Pixabay API for searchable stock photos
-- [ ] Add more UI component categories (Navigation, Modals, Tables, Forms)
-- [ ] Add a color palette generator section
-
-### Long Term
-- [ ] Backend API to proxy third-party requests and handle rate limiting centrally
-- [ ] User-submitted components with moderation
-- [ ] Browser extension for saving resources from any website
-- [ ] Export saved resources as a ZIP file
-
----
-
-## 12. Lessons Learned
-
-### Technical
-
-**Client-side API aggregation is powerful but fragile.** Relying on multiple third-party APIs means any one of them can change, go down, or rate-limit the application. A backend proxy layer would make the application more resilient and allow for centralized caching and rate limit management.
-
-**Session caching significantly improves perceived performance.** Storing API responses in `sessionStorage` with a TTL reduced redundant network requests and made tab switching between inspiration sources feel instant.
-
-**Debouncing is essential for search inputs.** Without debouncing, every keystroke would fire an API request. A 400–500ms debounce window reduced API calls by approximately 80% during typical search usage.
-
-**Sandboxed iframes are the right approach for live component previews.** Rendering third-party HTML/CSS inside the main React DOM would cause style conflicts. Using `sandbox="allow-scripts"` iframes isolates each component preview safely.
-
-### Design
-
-**A consistent dark design system reduces cognitive load.** Using a single color palette with defined semantic roles (primary, secondary, accent) made it easy to maintain visual consistency across all sections without per-component style decisions.
-
-**Progressive loading with skeleton screens is better than a single loading spinner.** Each section loads independently, so users can interact with loaded sections while others are still fetching.
-
----
-
-## Appendix A — Project File Structure
-
-```
+```text
 live-pixvault/
-├── public/
-│   ├── favicon.ico
-│   ├── placeholder.svg
-│   └── robots.txt
-├── src/
-│   ├── components/
-│   │   ├── ui/                    # shadcn/ui primitives (48 components)
-│   │   ├── Navbar.tsx
-│   │   ├── HeroSection.tsx
-│   │   ├── StatsBar.tsx
-│   │   ├── GifShowcase.tsx
-│   │   ├── UIComponents.tsx
-│   │   ├── IconShowcase.tsx
-│   │   ├── IllustrationGallery.tsx
-│   │   ├── InspirationFeed.tsx
-│   │   ├── NavLink.tsx
-│   │   └── Footer.tsx
-│   ├── hooks/
-│   ├── lib/
-│   │   └── utils.ts
-│   ├── pages/
-│   │   ├── Index.tsx
-│   │   └── NotFound.tsx
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
-├── DOCUMENTATION.md               # This file
-├── README.md                      # Project overview
-├── SKILLS.md                      # Design system reference
-├── package.json
-├── vite.config.ts
-├── tailwind.config.ts
-└── tsconfig.json
+├─ src/
+│  ├─ App.tsx                    # providers, lazy routing, route fallback
+│  ├─ main.tsx
+│  ├─ index.css                  # global tokens, focus/reduced-motion rules
+│  ├─ pages/                     # route-level composition
+│  ├─ components/
+│  │  ├─ AppErrorBoundary.tsx
+│  │  ├─ GlobalCommandMenu.tsx
+│  │  ├─ PageShell.tsx
+│  │  ├─ Navbar.tsx
+│  │  ├─ Footer.tsx
+│  │  ├─ UIComponents.tsx
+│  │  ├─ GifShowcase.tsx
+│  │  ├─ IconShowcase.tsx
+│  │  ├─ IllustrationGallery.tsx
+│  │  ├─ InspirationFeed.tsx
+│  │  └─ ui/                     # shadcn/Radix primitives
+│  ├─ data/
+│  │  └─ componentCatalog.ts     # curated component definitions
+│  ├─ hooks/
+│  │  ├─ useDebouncedValue.ts
+│  │  └─ usePersistentSet.ts
+│  ├─ lib/
+│  │  ├─ clipboard.ts
+│  │  ├─ env.ts
+│  │  ├─ supabase.ts
+│  │  └─ utils.ts
+│  ├─ services/
+│  │  ├─ component.service.ts
+│  │  ├─ http.ts
+│  │  ├─ iconify.service.ts
+│  │  └─ picsum.service.ts
+│  ├─ types/
+│  │  └─ resources.ts
+│  └─ test/
+│     └─ example.test.ts         # catalog integrity invariants
+├─ supabase/
+│  ├─ functions/
+│  │  └─ ai-designer/index.ts
+│  └─ migrations/
+│     ├─ 20260527035257_create_components_table.sql
+│     └─ 20260816023000_harden_component_writes.sql
+├─ vite.config.ts
+├─ vitest.config.ts
+└─ package.json
 ```
 
-## Appendix B — API Rate Limit Summary
-
-| API | Rate Limit | Reset Period | Caching Strategy |
-|-----|-----------|--------------|-----------------|
-| Reddit JSON | ~60 req/min | Per minute | None (live) |
-| Iconify Search | Generous | — | None (live) |
-| Iconify SVG | Generous | — | In-memory per session |
-| Lorem Picsum | None | — | None (live) |
-| RSS2JSON | 10,000 req/day | Daily | sessionStorage, 6h TTL |
-| HN Algolia | Generous | — | sessionStorage, 6h TTL |
-| GitHub REST | 60 req/hour | Hourly | sessionStorage, 6h TTL |
+`src/App.css` and the unused compatibility `NavLink` wrapper were removed as dead code.
 
 ---
 
-*This document was written as part of the PIXVAULT project portfolio submission.*
-*© 2026 Domince Aseberos — Open source under the MIT License.*
+## 4. Separation of concerns
+
+### Presentation layer
+
+`pages/` and `components/` render the experience. Route pages are intentionally thin and use `PageShell` for shared navbar/footer composition.
+
+### Domain/data layer
+
+`src/data/componentCatalog.ts` contains curated component records. Keeping catalog content outside `UIComponents.tsx` prevents content changes from touching pagination, querying, persistence, or card behavior.
+
+### Service layer
+
+- `component.service.ts`: Supabase component reads/counts.
+- `http.ts`: status checking, timeout/cancellation, normalized HTTP errors.
+- `iconify.service.ts`: Iconify search/SVG retrieval.
+- `picsum.service.ts`: Picsum list/image URL behavior.
+
+The remaining GIF and inspiration parsing is still colocated with those feature components. This is acceptable at the present complexity, but should be extracted if either feature acquires mutations, authentication, multiple consumers, or substantially more parsing logic.
+
+### Reusable client-state layer
+
+- `useDebouncedValue`: timing/debounce lifecycle.
+- `usePersistentSet`: bookmark-like Set state persisted in `localStorage`.
+
+### Infrastructure layer
+
+- `lib/env.ts`: safe environment reading.
+- `lib/supabase.ts`: optional client initialization.
+- Supabase migration/Edge Function files: persistent data and trusted writes.
+
+---
+
+## 5. State ownership and use-state rules
+
+PIXVAULT follows the rule that state should have one owner and derived values should not be duplicated.
+
+| State | Owner | Persistence | Notes |
+| --- | --- | --- | --- |
+| Current route | React Router | URL | canonical navigation state |
+| Supabase component list/count | TanStack Query | query cache | retry + stale time configured globally |
+| Icon search results | TanStack Query | query cache | debounced query; request signal supported |
+| GIF list/page token | `GifShowcase` | memory | stale requests cancelled with `AbortController` |
+| Photo list/page | `IllustrationGallery` | memory | requests cancellable; duplicate actions guarded |
+| Inspiration feed | `InspirationFeed` | memory + `sessionStorage` cache | source cache is optional/failure-tolerant |
+| Saved components/GIFs/articles | `usePersistentSet` | `localStorage` | survives refresh; storage denial does not crash UI |
+| Search/filter/page controls | feature component | memory | local UI state only |
+| Reduced motion | Framer `MotionConfig` + OS preference | system | animations degrade automatically |
+
+### Preventive interaction rules
+
+- Expensive network actions are disabled or guarded while already loading.
+- Debounced searches do not launch on every keystroke.
+- Aborted requests do not show false error toasts.
+- Copy/download actions surface success/failure.
+- Route-level Suspense has an explicit loading fallback.
+- Unknown render failures fall back to a full-app recovery boundary.
+
+---
+
+## 6. Data and request flows
+
+### Component catalog read flow
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant UI as UIComponents
+  participant Q as TanStack Query
+  participant S as component.service
+  participant DB as Supabase components
+
+  U->>UI: Open /components
+  UI->>Q: query components/ai
+  Q->>S: listAIComponents()
+  S->>DB: SELECT public component fields
+  DB-->>S: rows
+  S-->>Q: normalized UIComponent[]
+  Q-->>UI: cached data/error state
+  UI-->>U: local catalog + generated records
+```
+
+If Supabase client variables are missing, the service returns an empty remote list and the curated local catalog remains usable.
+
+### AI generated component write flow
+
+```mermaid
+sequenceDiagram
+  participant C as Trusted caller/scheduler
+  participant F as ai-designer Edge Function
+  participant G as Groq
+  participant DB as Supabase
+
+  C->>F: POST + Bearer AI_DESIGNER_SECRET
+  F->>F: method + secret validation
+  F->>DB: read recent names
+  F->>G: bounded generation request
+  G-->>F: JSON component
+  F->>F: shape/category/HTML safety validation
+  F->>DB: INSERT using service role
+  DB-->>F: success
+  F-->>C: 201
+```
+
+The browser does **not** own the service-role key or AI designer secret.
+
+### Icon search flow
+
+Search text → debounced value → React Query key → Iconify service → cancellable/status-checked response → cards. Copy and download fetch the raw SVG and handle failure explicitly.
+
+---
+
+## 7. Database model and RLS
+
+### Table
+
+```mermaid
+erDiagram
+  COMPONENTS {
+    uuid id PK
+    text name
+    text category
+    text author
+    text source_url
+    text html
+    timestamptz created_at
+  }
+```
+
+The original migration enabled RLS and allowed anonymous SELECT + INSERT. The hardening migration removes anonymous mutation capability:
+
+```text
+public/anon:
+  SELECT -> allowed by existing RLS policy
+  INSERT/UPDATE/DELETE -> revoked
+
+trusted Edge Function:
+  service role -> performs validated INSERT
+```
+
+This keeps the account-free read experience while preventing arbitrary public clients from directly filling the catalog with HTML.
+
+### Deployment requirement
+
+Apply the migration before relying on the new write-security model:
+
+`supabase/migrations/20260816023000_harden_component_writes.sql`
+
+The Edge Function must be configured with server-side secrets. `verify_jwt = false` is intentional only because the function enforces its own dedicated bearer secret; do not expose that secret to the frontend.
+
+---
+
+## 8. Security controls
+
+1. **Generated HTML preview isolation**
+   - iframe uses `sandbox="allow-scripts"` without `allow-same-origin`.
+   - database HTML is not injected into the main application DOM.
+
+2. **Generated HTML server validation**
+   - rejects `<style>`, `<script>`, `<iframe>`, `<object>`, `<embed>`, `<meta>`, and `<base>`.
+   - rejects `javascript:` URLs.
+   - validates expected category, bounded name, and bounded HTML size.
+
+3. **Database write restriction**
+   - direct anonymous writes revoked.
+   - service-role write is isolated to the Edge Function.
+
+4. **Secret handling**
+   - browser only sees `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+   - service role, Groq key, and generator secret remain server-side.
+
+5. **Network hardening**
+   - reusable HTTP helper checks non-2xx responses and applies a timeout.
+   - interactive searches support cancellation.
+   - downloads check status before creating object URLs.
+
+6. **Dependency hygiene**
+   - React Router and Vite upgraded to patched current lines during this baseline.
+   - `npm audit` reports zero vulnerabilities as of 2026-08-16.
+
+The shadcn chart primitive contains a controlled `dangerouslySetInnerHTML` path for generated chart CSS from local configuration. It is not part of the generated component HTML pipeline.
+
+---
+
+## 9. UX and accessibility baseline
+
+Implemented improvements:
+
+- `Ctrl/Cmd + K` command navigation.
+- route-level loading state.
+- global render error recovery.
+- branded 404 with SPA links.
+- mobile navigation ARIA state (`aria-expanded`, `aria-controls`, explicit label).
+- persistent bookmarks/saves.
+- horizontal overflow handling for dense filter chips.
+- visible focus styling.
+- reduced-motion support via Framer Motion and CSS media query.
+- touch-visible resource card actions instead of hover-only controls on smaller viewports.
+- inline retry state where Supabase generated items fail.
+- copy/download feedback and failure handling.
+- disabled duplicate network actions during loading.
+
+### Added/corrected catalog components
+
+The manual catalog now includes practical patterns that were missing:
+
+- Command Palette
+- Responsive Action Drawer
+- Sortable Data Table
+- Validated Sign In Form
+- Empty Collection State
+- Inline Retry State
+
+`Status Badge` was corrected from the `Buttons` category to `Badges`.
+
+---
+
+## 10. Performance baseline
+
+Before route splitting, the production build emitted one initial JavaScript bundle of roughly **843 KB** minified.
+
+After route-level lazy loading, the baseline build emits approximately:
+
+- initial app chunk: **361 KB** minified / ~118 KB gzip
+- homepage route: ~34 KB
+- feature routes: ~5–10 KB each
+- component catalog: separately loaded chunk (~272 KB)
+
+The large static catalog is intentionally kept out of routes that do not use it.
+
+Future optimization is only warranted if real-user performance data shows a need. The most obvious next target would be splitting the large static component catalog by category or loading it as structured data.
+
+---
+
+## 11. Error-handling strategy
+
+```mermaid
+flowchart TD
+  Action[User action] --> Request{Network request?}
+  Request -- No --> Local[Local state update]
+  Request -- Yes --> Guard[Debounce / loading guard / abort previous]
+  Guard --> Call[Status-checked request]
+  Call -->|Success| Success[Update cache/state + feedback]
+  Call -->|Abort| Ignore[No false error toast]
+  Call -->|Failure| Recover[Inline retry or toast; retain usable local content]
+  Recover --> UI[Interface remains interactive]
+  Local --> UI
+  Success --> UI
+  UI --> Render{Render throws?}
+  Render -- Yes --> Boundary[AppErrorBoundary recovery]
+```
+
+Failures are handled as close as practical to their owner, while catastrophic render failures are caught at the app boundary.
+
+---
+
+## 12. Test and validation strategy
+
+Current automated test invariants verify:
+
+1. curated component identities are unique;
+2. corrected/essential catalog entries exist in the expected categories;
+3. catalog entries contain required metadata and a valid HTTP(S) source.
+
+Required pre-merge/pre-release gate:
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run test -- --run
+npm run build
+npm audit
+git diff --check
+```
+
+2026-08-16 result:
+- TypeScript: PASS
+- ESLint: PASS with 0 errors; 7 non-blocking shadcn Fast Refresh warnings
+- Vitest: 3/3 PASS
+- Vite production build: PASS
+- npm audit: 0 vulnerabilities
+- `git diff --check`: PASS
+
+---
+
+## 13. Implementation timeline
+
+### Engineering timeline
+
+```mermaid
+gantt
+  title PIXVAULT hardening baseline - 2026-08-16
+  dateFormat  YYYY-MM-DD
+  axisFormat  %b %d
+
+  section Audit
+  Routes, structure, state and security audit :done, audit, 2026-08-16, 1d
+  Dependency and build audit                :done, deps, 2026-08-16, 1d
+
+  section Architecture
+  Shared shell + global recovery             :done, arch1, 2026-08-16, 1d
+  Service/hooks/data separation              :done, arch2, 2026-08-16, 1d
+  Route-level code splitting                 :done, arch3, 2026-08-16, 1d
+
+  section UX
+  Command navigation + accessibility         :done, ux1, 2026-08-16, 1d
+  Persistent saves + request prevention      :done, ux2, 2026-08-16, 1d
+  Component catalog additions/corrections    :done, ux3, 2026-08-16, 1d
+
+  section Security
+  iframe isolation                           :done, sec1, 2026-08-16, 1d
+  RLS/write-path hardening                   :done, sec2, 2026-08-16, 1d
+  Edge Function validation/auth              :done, sec3, 2026-08-16, 1d
+
+  section Validation
+  Type/lint/test/build/audit gate             :done, gate, 2026-08-16, 1d
+  Documentation baseline                      :done, docs, 2026-08-16, 1d
+```
+
+Observed session checkpoints:
+- **02:24 PHT** — Lynx scope/connection and audit started.
+- **02:52 PHT** — first hardened production build validated.
+- **02:59 PHT** — Vite/Router modernization and route splitting validated.
+- **03:06 PHT** — meaningful catalog-invariant tests validated.
+
+These timestamps are command/session checkpoints, not estimates of individual task duration.
+
+---
+
+## 14. Maintenance rules
+
+### When adding a route
+
+1. Add a lazy import and `<Route>` in `App.tsx`.
+2. Use `PageShell` unless the route intentionally owns full-page chrome.
+3. Add a command-menu destination if it is a primary resource.
+4. Provide loading, empty, and error behavior.
+
+### When adding a remote API
+
+1. Put reusable I/O in `src/services`.
+2. Use a typed response shape; avoid `any`.
+3. Check HTTP status.
+4. Support `AbortSignal` for search or changing filters.
+5. Do not duplicate server data into multiple independent states.
+6. Give the user a retry or stable fallback.
+
+### When adding a curated component
+
+1. Add it only to `src/data/componentCatalog.ts`.
+2. Use a unique `(author, category, name)` identity.
+3. Use the correct category.
+4. Include a real `http(s)` source URL.
+5. Keep the preview self-contained.
+6. Run catalog invariant tests.
+
+### When changing generated component writes
+
+Do not re-enable anonymous INSERT. Keep generation behind the trusted Edge Function and validate output before database insertion.
+
+---
+
+## 15. Known boundaries / next sensible improvements
+
+These are not current blockers:
+
+- Extract Reddit and inspiration adapters into services if feature complexity grows.
+- Split the static component catalog by category only if real-user performance data justifies it.
+- Add browser-level route/a11y tests (Playwright) if this becomes a deployed product with regression requirements.
+- Add observability for Edge Function failures/rate limits before automating high-frequency generation.
+- Add a “Saved” unified route only if cross-resource saved-item browsing becomes a primary workflow.
+
+The current baseline deliberately avoids authentication, account synchronization, and unnecessary backend complexity because PIXVAULT’s product promise is an account-free resource browser.
+
+---
+
+## 16. Notion documentation status
+
+This file is the canonical documentation payload for the 2026-08-16 hardening baseline.
+
+The connected Lynx runtime (`0.5.20-beta.9`) was checked before and after implementation. Its exposed tool surface currently includes local workspace/Git, GitHub, Vercel, Supabase, Neon, and Firebase actions, but **does not expose a Notion/external-MCP call tool**. Because the implementation was explicitly scoped to Lynx-only integrations, this documentation has not been published through a separate ChatGPT Notion connector.
+
+When Lynx exposes its configured Notion MCP call tool, publish this document as the architecture/engineering page rather than maintaining a divergent copy.

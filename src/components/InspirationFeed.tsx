@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Bookmark, Flame, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { usePersistentSet } from "@/hooks/usePersistentSet";
+
+interface RssItem { title?: string; link?: string; thumbnail?: string; enclosure?: { link?: string }; content?: string; description?: string; pubDate?: string; categories?: string[] }
+interface HnHit { title?: string; url?: string; objectID?: string; created_at?: string; story_text?: string; points?: number }
+interface GithubRepo { full_name?: string; html_url?: string; owner?: { avatar_url?: string }; updated_at?: string; description?: string; stargazers_count?: number; topics?: string[] }
 
 interface FeedItem {
   title: string;
@@ -43,7 +48,7 @@ const getCached = (key: string): FeedItem[] | null => {
 };
 
 const setCache = (key: string, data: FeedItem[]) => {
-  sessionStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  try { sessionStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() })); } catch { /* cache is optional */ }
 };
 
 const relativeTime = (dateStr: string) => {
@@ -88,7 +93,7 @@ const hashColor = (str: string) => {
 };
 
 const getCardBg = (item: FeedItem) => {
-  // Priority: thumbnail → extracted from description → gradient
+  // Priority: thumbnail â†’ extracted from description â†’ gradient
   const thumb = item.thumbnail;
   if (thumb && isValidImage(thumb)) {
     return { backgroundImage: `url(${thumb})` };
@@ -113,7 +118,7 @@ const InspirationFeed = () => {
   const [activeSource, setActiveSource] = useState("CSS-Tricks");
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const { values: saved, toggle: toggleSaved } = usePersistentSet("pixvault_saved_inspiration");
 
   const fetchRSS = useCallback(async (source: { label: string; rss: string }) => {
     const cacheKey = `pixvault_rss_${source.label}`;
@@ -122,9 +127,10 @@ const InspirationFeed = () => {
 
     try {
       const res = await fetch(`${RSS2JSON_BASE}?rss_url=${encodeURIComponent(source.rss)}&count=10`);
+      if (!res.ok) throw new Error(`RSS request failed (${res.status})`);
       const data = await res.json();
       if (data.status !== "ok") return [];
-      const items: FeedItem[] = data.items.map((item: any) => {
+      const items: FeedItem[] = (data.items as RssItem[]).map((item) => {
         // Try multiple sources for thumbnail
         const thumbnail =
           item.thumbnail ||
@@ -156,8 +162,9 @@ const InspirationFeed = () => {
 
     try {
       const res = await fetch(HN_ENDPOINT);
+      if (!res.ok) throw new Error(`HN request failed (${res.status})`);
       const data = await res.json();
-      const items: FeedItem[] = data.hits.map((hit: any) => ({
+      const items: FeedItem[] = (data.hits as HnHit[]).map((hit) => ({
         title: hit.title,
         link: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
         thumbnail: "",
@@ -179,13 +186,14 @@ const InspirationFeed = () => {
     const cached = getCached(cacheKey);
     if (cached) return cached;
     try {
-      // GitHub search API — no auth needed for public repos, sorted by stars
+      // GitHub search API â€” no auth needed for public repos, sorted by stars
       const res = await fetch(
         "https://api.github.com/search/repositories?q=topic:frontend+topic:ui+stars:>500&sort=stars&order=desc&per_page=12",
         { headers: { Accept: "application/vnd.github+json" } }
       );
+      if (!res.ok) throw new Error(`GitHub request failed (${res.status})`);
       const data = await res.json();
-      const items: FeedItem[] = (data.items || []).map((repo: any) => ({
+      const items: FeedItem[] = ((data.items ?? []) as GithubRepo[]).map((repo) => ({
         title: repo.full_name,
         link: repo.html_url,
         thumbnail: repo.owner?.avatar_url || "",
@@ -221,12 +229,8 @@ const InspirationFeed = () => {
   }, [activeSource, fetchRSS, fetchHN, fetchGitHubTrending]);
 
   const toggleSave = (link: string) => {
-    setSaved((prev) => {
-      const next = new Set(prev);
-      if (next.has(link)) next.delete(link); else next.add(link);
-      return next;
-    });
-    toast.success(saved.has(link) ? "Removed" : "Saved!");
+    const isSaved = toggleSaved(link);
+    toast.success(isSaved ? "Saved to this browser" : "Removed from saved");
   };
 
   const featured = items[0];
@@ -238,14 +242,14 @@ const InspirationFeed = () => {
         <div className="mb-12 text-center">
           <div className="mb-4 inline-flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-widest text-accent">
-              Updated Daily · Curated from the Web
+              Updated Daily Â· Curated from the Web
             </span>
           </div>
           <h2 className="font-display text-4xl font-bold text-foreground sm:text-5xl">
             What the best designers are reading.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Fresh articles, tutorials, and showcases from the top design and frontend publications — updated every 24 hours.
+            Fresh articles, tutorials, and showcases from the top design and frontend publications â€” updated every 24 hours.
           </p>
         </div>
 
@@ -309,7 +313,7 @@ const InspirationFeed = () => {
                       </span>
                       {featured.points && featured.points > 100 && (
                         <span className="flex items-center gap-1 text-accent">
-                          <Flame className="h-3 w-3" /> {featured.points >= 1000 ? `${(featured.points / 1000).toFixed(1)}k` : featured.points} {activeSource === "GitHub Trending" ? "★" : "pts"}
+                          <Flame className="h-3 w-3" /> {featured.points >= 1000 ? `${(featured.points / 1000).toFixed(1)}k` : featured.points} {activeSource === "GitHub Trending" ? "â˜…" : "pts"}
                         </span>
                       )}
                     </div>
@@ -349,7 +353,7 @@ const InspirationFeed = () => {
                         </span>
                       {item.points && item.points > 100 && (
                           <span className="flex items-center gap-1 text-accent">
-                            <Flame className="h-3 w-3" /> {item.points >= 1000 ? `${(item.points / 1000).toFixed(1)}k` : item.points} {activeSource === "GitHub Trending" ? "★" : "pts"}
+                            <Flame className="h-3 w-3" /> {item.points >= 1000 ? `${(item.points / 1000).toFixed(1)}k` : item.points} {activeSource === "GitHub Trending" ? "â˜…" : "pts"}
                           </span>
                         )}
                       </div>

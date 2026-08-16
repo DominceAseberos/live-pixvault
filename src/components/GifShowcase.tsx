@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { copyText } from "@/lib/clipboard";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePersistentSet } from "@/hooks/usePersistentSet";
 import { motion } from "framer-motion";
 import { Search, Copy, Bookmark, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+
+interface RedditPreviewSource { url?: string }
+interface RedditPreviewVariant { source?: RedditPreviewSource }
+interface RedditPreviewImage { source?: RedditPreviewSource; resolutions?: RedditPreviewSource[]; variants?: { gif?: RedditPreviewVariant; mp4?: RedditPreviewVariant } }
+interface RedditPost { id?: string; title?: string; url?: string; permalink?: string; subreddit?: string; score?: number; created_utc?: number; thumbnail?: string; preview?: { images?: RedditPreviewImage[] } }
+interface RedditChild { data?: RedditPost }
+interface RedditListing { data?: { children?: RedditChild[]; after?: string | null } }
 
 interface RedditGif {
   id: string;
@@ -16,7 +26,7 @@ interface RedditGif {
 
 const SUBREDDITS = ["gifs", "reactiongifs", "HighQualityGifs", "animatedpixelart"];
 
-const extractGifUrl = (post: any): string | null => {
+const extractGifUrl = (post: RedditPost): string | null => {
   // Direct .gif URLs
   if (post.url?.endsWith(".gif")) return post.url;
   // Reddit hosted video preview as gif
@@ -42,7 +52,7 @@ const extractGifUrl = (post: any): string | null => {
   return null;
 };
 
-const getPreviewUrl = (post: any): string => {
+const getPreviewUrl = (post: RedditPost): string => {
   if (post.preview?.images?.[0]?.resolutions) {
     const resolutions = post.preview.images[0].resolutions;
     const mid = resolutions[Math.min(2, resolutions.length - 1)];
@@ -56,16 +66,18 @@ const GifShowcase = () => {
   const [gifs, setGifs] = useState<RedditGif[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const { values: saved, toggle: toggleSaved } = usePersistentSet("pixvault_saved_gifs");
   const [activeSub, setActiveSub] = useState("gifs");
   const [after, setAfter] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const abortRef = useRef<AbortController | null>(null);
+  const debouncedQuery = useDebouncedValue(query.trim(), 500);
 
-  const parseRedditPosts = (posts: any[]): RedditGif[] => {
+  const parseRedditPosts = (posts: RedditChild[]): RedditGif[] => {
     return posts
-      .map((child: any) => {
+      .map((child) => {
         const post = child.data;
+        if (!post) return null;
         const gifUrl = extractGifUrl(post);
         if (!gifUrl) return null;
         return {
@@ -91,17 +103,22 @@ const GifShowcase = () => {
       } else {
         endpoint = `https://www.reddit.com/r/${sub}/hot.json?limit=20${afterToken ? `&after=${afterToken}` : ""}`;
       }
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       const res = await fetch(endpoint, {
         headers: { "Accept": "application/json" },
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("Reddit API error");
-      const data = await res.json();
-      const posts = data?.data?.children || [];
+      const data = await res.json() as RedditListing;
+      const posts = data.data?.children ?? [];
       const results = parseRedditPosts(posts);
       setAfter(data?.data?.after || null);
       setHasMore(!!data?.data?.after);
       setGifs(prev => append ? [...prev, ...results] : results);
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (!append) setGifs([]);
       toast.error("Could not load GIFs. Try again shortly.");
     } finally {
@@ -111,34 +128,27 @@ const GifShowcase = () => {
 
   useEffect(() => {
     setAfter(null);
-    fetchGifs(activeSub, query);
-  }, [activeSub, fetchGifs]);
+    void fetchGifs(activeSub, debouncedQuery);
+    return () => abortRef.current?.abort();
+  }, [activeSub, debouncedQuery, fetchGifs]);
 
   const handleSearch = (value: string) => {
     setQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setAfter(null);
-      fetchGifs(activeSub, value);
-    }, 500);
   };
 
   const loadMore = () => {
-    fetchGifs(activeSub, query, after, true);
+    if (loading || !after) return;
+    void fetchGifs(activeSub, debouncedQuery, after, true);
   };
 
-  const copyUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
-    toast.success("GIF URL copied!");
+  const copyUrl = async (url: string) => {
+    try { await copyText(url); toast.success("GIF URL copied"); }
+    catch { toast.error("Clipboard access failed"); }
   };
 
   const toggleSave = (id: string) => {
-    setSaved(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    toast.success(saved.has(id) ? "Removed" : "Saved!");
+    const isSaved = toggleSaved(id);
+    toast.success(isSaved ? "Saved to this browser" : "Removed from saved");
   };
 
   const isHot = (score: number) => score > 1000;
@@ -227,10 +237,10 @@ const GifShowcase = () => {
                   {gif.title || "Untitled GIF"}
                 </p>
                 <div className="flex gap-2">
-                  <button onClick={() => copyUrl(gif.gifUrl)} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground hover:opacity-90">
+                  <button onClick={() => void copyUrl(gif.gifUrl)} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground hover:opacity-90">
                     <Copy className="h-3 w-3" /> Copy
                   </button>
-                  <button onClick={() => toggleSave(gif.id)} className={`ml-auto rounded-full p-1 transition-colors ${saved.has(gif.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                  <button type="button" aria-label={saved.has(gif.id) ? `Remove ${gif.title} from saved` : `Save ${gif.title}`} onClick={() => toggleSave(gif.id)} className={`ml-auto rounded-full p-1 transition-colors ${saved.has(gif.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
                     <Bookmark className="h-3.5 w-3.5" fill={saved.has(gif.id) ? "currentColor" : "none"} />
                   </button>
                 </div>
@@ -250,7 +260,7 @@ const GifShowcase = () => {
           <div className="flex flex-col items-center gap-4 py-16 text-center text-muted-foreground">
             <p>No GIFs found. Try a different search or subreddit.</p>
             <button
-              onClick={() => { setQuery(""); fetchGifs(activeSub, ""); }}
+              onClick={() => setQuery("")}
               className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm hover:border-primary hover:text-foreground transition-colors"
             >
               <RefreshCw className="h-3.5 w-3.5" /> Reset
@@ -260,7 +270,7 @@ const GifShowcase = () => {
 
         {!loading && hasMore && gifs.length > 0 && (
           <div className="mt-10 flex flex-col items-center gap-3">
-            <button onClick={loadMore} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-6 py-3 font-display text-sm font-semibold text-foreground transition-all hover:border-primary hover:bg-muted">
+            <button type="button" disabled={loading} onClick={loadMore} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-6 py-3 font-display text-sm font-semibold text-foreground transition-all hover:border-primary hover:bg-muted">
               Load More
             </button>
           </div>
