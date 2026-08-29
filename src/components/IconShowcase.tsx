@@ -5,10 +5,11 @@ import { Search, Copy, Download, Sparkles, Check, RefreshCw } from "lucide-react
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { fetchIconSvg, searchIconify, type IconResult } from "@/services/iconify.service";
+import { fetchIconSvg, iconSvgUrl, searchIconify, type IconResult } from "@/services/iconify.service";
 import { CURATED_ICONS, type CuratedIcon } from "@/data/curatedIcons";
 
 const POPULAR_QUERIES = ["arrow", "zap", "sparkles", "code", "home", "shield", "layers", "user", "star", "settings", "search", "terminal"];
+const ICON_PREVIEW_COLOR = "#d8d5e3";
 const ICON_SETS = [
   { label: "All Sets", value: "" },
   { label: "Featured (Offline)", value: "featured" },
@@ -236,10 +237,10 @@ const IconShowcase = () => {
                       className="group relative flex flex-col items-center justify-center rounded-xl border border-border bg-background p-4 text-center hover:border-secondary transition-all shadow-sm"
                     >
                       <img
-                        src={`https://api.iconify.design/${icon.prefix}/${icon.name}.svg`}
+                        src={iconSvgUrl(icon, ICON_PREVIEW_COLOR)}
                         alt={icon.name}
                         loading="lazy"
-                        className="mb-3 h-10 w-10 transition-transform group-hover:scale-110 filter dark:invert"
+                        className="mb-3 h-10 w-10 opacity-90 transition-[transform,opacity] group-hover:scale-110 group-hover:opacity-100"
                       />
                       <span className="line-clamp-1 font-mono text-xs text-foreground font-medium">{icon.name}</span>
                       <span className="font-mono text-[10px] text-muted-foreground">{icon.prefix}</span>
