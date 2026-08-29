@@ -1,8 +1,8 @@
-import type { ApiRequest, ApiResponse } from "../../lib/api";
-import { errorMessage, queryString, setReadOnlyHeaders } from "../../lib/api";
-import { requireServerSecret } from "../../lib/auth";
-import { allowRequest } from "../../lib/rate-limit";
-import { getRedis, REDIS_KEYS, type RedisComponent } from "../../lib/redis";
+import type { ApiRequest, ApiResponse } from "../../lib/api.js";
+import { errorMessage, queryString, setReadOnlyHeaders } from "../../lib/api.js";
+import { requireServerSecret } from "../../lib/auth.js";
+import { allowRequest } from "../../lib/rate-limit.js";
+import { getRedis, REDIS_KEYS, type RedisComponent } from "../../lib/redis.js";
 
 const SAFE_ID = /^[a-zA-Z0-9_-]{1,128}$/;
 

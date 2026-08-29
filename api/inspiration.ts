@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
-import type { ApiRequest, ApiResponse } from "../lib/api";
-import { asRecord, errorMessage, queryString, setReadOnlyHeaders } from "../lib/api";
-import { getRedis, REDIS_KEYS } from "../lib/redis";
+import type { ApiRequest, ApiResponse } from "../lib/api.js";
+import { asRecord, errorMessage, queryString, setReadOnlyHeaders } from "../lib/api.js";
+import { getRedis, REDIS_KEYS } from "../lib/redis.js";
 
 const CRAWLER_TTL_SECONDS = 3600;
 

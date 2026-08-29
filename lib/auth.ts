@@ -1,4 +1,4 @@
-import type { ApiRequest } from "./api";
+import type { ApiRequest } from "./api.js";
 
 export type AuthCheck =
   | { ok: true }

@@ -1,6 +1,6 @@
-import type { ApiRequest } from "./api";
-import { clientIp } from "./api";
-import { getRedis } from "./redis";
+import type { ApiRequest } from "./api.js";
+import { clientIp } from "./api.js";
+import { getRedis } from "./redis.js";
 
 export async function allowRequest(
   req: ApiRequest,

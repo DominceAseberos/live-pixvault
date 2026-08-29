@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { ApiRequest, ApiResponse } from "../lib/api";
-import { asRecord, errorMessage, setReadOnlyHeaders } from "../lib/api";
-import { requireServerSecret } from "../lib/auth";
-import { allowRequest } from "../lib/rate-limit";
-import { getRedis, REDIS_KEYS, type RedisComponent } from "../lib/redis";
-import { DEFAULT_ALLOWED_CATEGORIES, sanitizeAndValidateComponent } from "../lib/sanitize-component";
+import type { ApiRequest, ApiResponse } from "../lib/api.js";
+import { asRecord, errorMessage, setReadOnlyHeaders } from "../lib/api.js";
+import { requireServerSecret } from "../lib/auth.js";
+import { allowRequest } from "../lib/rate-limit.js";
+import { getRedis, REDIS_KEYS, type RedisComponent } from "../lib/redis.js";
+import { DEFAULT_ALLOWED_CATEGORIES, sanitizeAndValidateComponent } from "../lib/sanitize-component.js";
 
 const STYLES = [
   "Glassmorphism", "Cyberpunk", "Neumorphism", "Retro 8-bit", "Brutalist",

@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from "../lib/api";
-import { errorMessage, queryString, setReadOnlyHeaders } from "../lib/api";
-import { getRedis, REDIS_KEYS } from "../lib/redis";
+import type { ApiRequest, ApiResponse } from "../lib/api.js";
+import { errorMessage, queryString, setReadOnlyHeaders } from "../lib/api.js";
+import { getRedis, REDIS_KEYS } from "../lib/redis.js";
 
 const CACHE_TTL_SECONDS = 1800;
 const ALLOWED_SUBREDDITS = new Set(["gifs", "reactiongifs", "highqualitygifs", "animatedpixelart", "cinemagraphs", "webdev"]);
