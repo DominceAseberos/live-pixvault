@@ -1,4 +1,4 @@
-import type { ApiRequest } from "./api.ts";
+import type { ApiRequest } from "./api";
 
 export type AuthCheck =
   | { ok: true }

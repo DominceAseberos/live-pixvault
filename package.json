@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.vercel.json --noEmit",
     "migrate:dry": "tsx scripts/migrate-supabase-to-redis.ts",
     "migrate:write": "tsx scripts/migrate-supabase-to-redis.ts --write",
     "redis:rebuild": "tsx scripts/rebuild-redis-components.ts",

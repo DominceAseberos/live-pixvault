@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { ApiRequest, ApiResponse } from "../lib/api.ts";
-import { asRecord, errorMessage, setReadOnlyHeaders } from "../lib/api.ts";
-import { requireServerSecret } from "../lib/auth.ts";
-import { allowRequest } from "../lib/rate-limit.ts";
-import { getRedis, REDIS_KEYS, type RedisComponent } from "../lib/redis.ts";
-import { DEFAULT_ALLOWED_CATEGORIES, sanitizeAndValidateComponent } from "../lib/sanitize-component.ts";
+import type { ApiRequest, ApiResponse } from "../lib/api";
+import { asRecord, errorMessage, setReadOnlyHeaders } from "../lib/api";
+import { requireServerSecret } from "../lib/auth";
+import { allowRequest } from "../lib/rate-limit";
+import { getRedis, REDIS_KEYS, type RedisComponent } from "../lib/redis";
+import { DEFAULT_ALLOWED_CATEGORIES, sanitizeAndValidateComponent } from "../lib/sanitize-component";
 
 const STYLES = [
   "Glassmorphism", "Cyberpunk", "Neumorphism", "Retro 8-bit", "Brutalist",
@@ -36,7 +36,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const auth = requireServerSecret(req, ["AI_DESIGNER_SECRET"]);
-  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+  if ("status" in auth) return res.status(auth.status).json({ error: auth.error });
 
   const groqApiKey = process.env.GROQ_API_KEY?.trim();
   if (!groqApiKey) {

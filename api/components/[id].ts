@@ -1,8 +1,8 @@
-import type { ApiRequest, ApiResponse } from "../../lib/api.ts";
-import { errorMessage, queryString, setReadOnlyHeaders } from "../../lib/api.ts";
-import { requireServerSecret } from "../../lib/auth.ts";
-import { allowRequest } from "../../lib/rate-limit.ts";
-import { getRedis, REDIS_KEYS, type RedisComponent } from "../../lib/redis.ts";
+import type { ApiRequest, ApiResponse } from "../../lib/api";
+import { errorMessage, queryString, setReadOnlyHeaders } from "../../lib/api";
+import { requireServerSecret } from "../../lib/auth";
+import { allowRequest } from "../../lib/rate-limit";
+import { getRedis, REDIS_KEYS, type RedisComponent } from "../../lib/redis";
 
 const SAFE_ID = /^[a-zA-Z0-9_-]{1,128}$/;
 
@@ -25,7 +25,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (req.method === "DELETE") {
       const auth = requireServerSecret(req, ["ADMIN_SECRET", "COMPONENT_WRITE_SECRET"]);
-      if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+      if ("status" in auth) return res.status(auth.status).json({ error: auth.error });
 
       const rate = await allowRequest(req, "components-delete", 30, 3600);
       res.setHeader("X-RateLimit-Remaining", String(rate.remaining));

@@ -1,6 +1,6 @@
-import type { ApiRequest } from "./api.ts";
-import { clientIp } from "./api.ts";
-import { getRedis } from "./redis.ts";
+import type { ApiRequest } from "./api";
+import { clientIp } from "./api";
+import { getRedis } from "./redis";
 
 export async function allowRequest(
   req: ApiRequest,
