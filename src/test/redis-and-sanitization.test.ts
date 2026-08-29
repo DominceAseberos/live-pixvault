@@ -126,6 +126,18 @@ describe("curated component catalog safety", () => {
       expect(component.html, component.name).not.toMatch(/<script|javascript:|data:text\/html/i);
     }
   });
+
+  it("keeps curated progress components responsive and accessible", () => {
+    const progressComponents = COMPONENTS.filter((component) => component.category === "Progress");
+
+    expect(progressComponents).toHaveLength(4);
+    for (const component of progressComponents) {
+      expect(component.html, component.name).toContain('role="progressbar"');
+      expect(component.html, component.name).toContain('aria-valuemin="0"');
+      expect(component.html, component.name).toContain('aria-valuemax="100"');
+      expect(component.html, component.name).toMatch(/width:min\(/);
+    }
+  });
 });
 
 describe("write endpoint authentication", () => {
