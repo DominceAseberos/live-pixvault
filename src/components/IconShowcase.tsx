@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Copy, Download, ExternalLink, RefreshCw } from "lucide-react";
+import { Search, Copy, Download, Sparkles, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { fetchIconSvg, iconSvgUrl, searchIconify, type IconResult } from "@/services/iconify.service";
+import { fetchIconSvg, searchIconify, type IconResult } from "@/services/iconify.service";
+import { CURATED_ICONS, type CuratedIcon } from "@/data/curatedIcons";
 
-const POPULAR_QUERIES = ["arrow", "home", "user", "star", "heart", "settings", "search", "menu", "check", "close"];
+const POPULAR_QUERIES = ["arrow", "zap", "sparkles", "code", "home", "shield", "layers", "user", "star", "settings", "search", "terminal"];
 const ICON_SETS = [
-  { label: "All", value: "" },
+  { label: "All Sets", value: "" },
+  { label: "Featured (Offline)", value: "featured" },
   { label: "Lucide", value: "lucide" },
-  { label: "Material", value: "mdi" },
+  { label: "Material Design", value: "mdi" },
   { label: "Heroicons", value: "heroicons" },
   { label: "Tabler", value: "tabler" },
   { label: "Phosphor", value: "ph" },
@@ -19,47 +21,77 @@ const ICON_SETS = [
 ];
 
 const IconShowcase = () => {
-  const [query, setQuery] = useState("design");
+  const [query, setQuery] = useState("sparkles");
   const [activeSet, setActiveSet] = useState("");
   const [svgCache, setSvgCache] = useState<Record<string, string>>({});
-  const debouncedQuery = useDebouncedValue(query.trim(), 350);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
 
+  // Live Iconify API Query
   const {
-    data: icons = [],
+    data: apiIcons = [],
     isFetching,
     isError,
-    refetch,
   } = useQuery({
     queryKey: ["icons", debouncedQuery, activeSet],
-    queryFn: ({ signal }) => searchIconify(debouncedQuery, activeSet, signal),
-    enabled: Boolean(debouncedQuery),
+    queryFn: ({ signal }) => {
+      if (activeSet === "featured") return Promise.resolve([]);
+      return searchIconify(debouncedQuery, activeSet, signal);
+    },
+    enabled: Boolean(debouncedQuery) && activeSet !== "featured",
     placeholderData: (previous) => previous,
   });
 
-  const copySvg = async (icon: IconResult) => {
+  // Filter curated vendored icons
+  const matchedCurated = useMemo(() => {
+    if (!debouncedQuery && activeSet !== "featured") return CURATED_ICONS.slice(0, 12);
+    const q = debouncedQuery.toLowerCase();
+    return CURATED_ICONS.filter((item) => {
+      if (activeSet && activeSet !== "featured" && item.set.toLowerCase() !== activeSet.toLowerCase()) {
+        return false;
+      }
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.set.toLowerCase().includes(q) ||
+        item.tags.some((t) => t.includes(q))
+      );
+    });
+  }, [debouncedQuery, activeSet]);
+
+  const copySvgString = async (svg: string, label: string, key: string) => {
     try {
-      const cacheKey = `${icon.prefix}:${icon.name}`;
-      const svg = svgCache[cacheKey] ?? await fetchIconSvg(icon);
-      if (!svgCache[cacheKey]) setSvgCache((previous) => ({ ...previous, [cacheKey]: svg }));
       await copyText(svg);
-      toast.success("SVG copied");
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+      toast.success(`Copied ${label} SVG!`);
     } catch {
-      toast.error("Could not copy this SVG");
+      toast.error("Could not copy SVG to clipboard");
     }
   };
 
-  const downloadSvg = async (icon: IconResult) => {
+  const copyApiSvg = async (icon: IconResult) => {
+    const key = `${icon.prefix}:${icon.name}`;
     try {
-      const svg = await fetchIconSvg(icon);
-      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${icon.prefix}-${icon.name}.svg`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+      const svg = svgCache[key] ?? (await fetchIconSvg(icon));
+      if (!svgCache[key]) setSvgCache((prev) => ({ ...prev, [key]: svg }));
+      await copySvgString(svg, `${icon.prefix}:${icon.name}`, key);
+    } catch {
+      toast.error("Could not fetch SVG");
+    }
+  };
+
+  const downloadSvgFile = (svg: string, name: string) => {
+    try {
+      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       URL.revokeObjectURL(url);
-      toast.success("SVG downloaded");
+      toast.success("Downloaded SVG!");
     } catch {
       toast.error("Download failed");
     }
@@ -69,11 +101,18 @@ const IconShowcase = () => {
     <section id="icon-showcase" className="relative bg-card py-24">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
-          <span className="font-mono text-xs uppercase tracking-widest text-secondary">200,000+ icons · 150+ icon sets · free</span>
-          <h2 className="mt-4 font-display text-4xl font-bold text-foreground sm:text-5xl">Every icon you'll ever need.</h2>
-          <p className="mt-4 text-muted-foreground">Search multiple open icon sets through Iconify. Copy the raw SVG or download it directly.</p>
+          <span className="font-mono text-xs uppercase tracking-widest text-secondary">
+            200,000+ Open Source Icons · Zero Bloat
+          </span>
+          <h2 className="mt-4 font-display text-4xl font-bold text-foreground sm:text-5xl">
+            Every icon you'll ever need.
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Search Lucide, Material, Heroicons, Tabler & Phosphor icon sets. One-click SVG copy or direct download.
+          </p>
         </div>
 
+        {/* Search Input */}
         <div className="mx-auto mb-6 max-w-xl">
           <label className="relative block">
             <span className="sr-only">Search icons</span>
@@ -81,83 +120,147 @@ const IconShowcase = () => {
             <input
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search icons... e.g. arrow, home, settings"
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search icons... e.g. zap, sparkles, arrow, terminal"
               className="w-full rounded-xl border border-border bg-muted/50 py-3 pl-11 pr-4 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary"
             />
           </label>
         </div>
 
+        {/* Quick Tag Pills */}
         <div className="mx-auto mb-6 flex max-w-2xl flex-wrap justify-center gap-2">
           {POPULAR_QUERIES.map((popular) => (
-            <button key={popular} type="button" onClick={() => setQuery(popular)} className="rounded-full border border-border px-3 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:border-secondary hover:text-foreground">
+            <button
+              key={popular}
+              type="button"
+              onClick={() => setQuery(popular)}
+              className="rounded-full border border-border px-3 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:border-secondary hover:text-foreground"
+            >
               {popular}
             </button>
           ))}
         </div>
 
+        {/* Icon Set Filters */}
         <div className="mb-10 flex gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:justify-center sm:overflow-visible">
           {ICON_SETS.map((set) => (
             <button
               key={set.value}
               type="button"
-              aria-pressed={activeSet === set.value}
               onClick={() => setActiveSet(set.value)}
-              className={`shrink-0 rounded-full px-4 py-2 font-mono text-xs transition-all ${activeSet === set.value ? "bg-secondary text-secondary-foreground" : "border border-border text-muted-foreground hover:border-secondary hover:text-foreground"}`}
+              className={`rounded-full px-4 py-2 font-mono text-xs transition-all ${
+                activeSet === set.value
+                  ? "bg-secondary text-secondary-foreground shadow-sm"
+                  : "border border-border text-muted-foreground hover:border-secondary hover:text-foreground"
+              }`}
             >
               {set.label}
             </button>
           ))}
         </div>
 
-        {isError ? (
-          <div role="alert" className="mx-auto max-w-lg rounded-2xl border border-destructive/30 bg-destructive/5 p-8 text-center">
-            <p className="font-display text-lg font-semibold text-foreground">Icon search is unavailable.</p>
-            <p className="mt-2 text-sm text-muted-foreground">The remote icon service did not respond successfully.</p>
-            <button type="button" onClick={() => void refetch()} className="mt-5 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-muted">
-              <RefreshCw className="h-4 w-4" /> Retry
-            </button>
-          </div>
-        ) : !debouncedQuery ? (
-          <div className="py-16 text-center text-muted-foreground">Enter a search term to find icons.</div>
-        ) : isFetching && icons.length === 0 ? (
-          <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12" aria-label="Loading icons">
-            {Array.from({ length: 48 }).map((_, index) => <div key={index} className="aspect-square rounded-lg shimmer" />)}
-          </div>
-        ) : icons.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground">No icons found. Try a different search.</div>
-        ) : (
-          <>
-            <div className="mb-3 text-right font-mono text-[10px] text-muted-foreground">{isFetching ? "Updating results…" : `${icons.length} results`}</div>
-            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12">
-              {icons.map((icon, index) => (
-                <motion.div
-                  key={`${icon.prefix}:${icon.name}`}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: Math.min(index * 0.01, 0.3) }}
-                  className="group relative flex aspect-square items-center justify-center rounded-lg border border-border bg-background transition-all hover:border-secondary focus-within:border-secondary"
-                >
-                  <img src={iconSvgUrl(icon, "#00d4ff")} alt="" className="h-6 w-6 transition-transform group-hover:scale-110" loading="lazy" />
-                  <span className="sr-only">{icon.prefix}:{icon.name}</span>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-lg bg-background/95 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                    <div className="flex gap-1">
-                      <button type="button" onClick={() => void copySvg(icon)} className="rounded-md bg-primary p-1.5 text-primary-foreground" aria-label={`Copy ${icon.name} SVG`}><Copy className="h-3 w-3" /></button>
-                      <button type="button" onClick={() => void downloadSvg(icon)} className="rounded-md border border-border p-1.5 text-foreground hover:bg-muted" aria-label={`Download ${icon.name} SVG`}><Download className="h-3 w-3" /></button>
-                    </div>
-                    <span className="mt-1 max-w-full truncate px-1 font-mono text-[8px] text-muted-foreground">{icon.name}</span>
-                  </div>
-                </motion.div>
-              ))}
+        {/* Curated / Featured Section if available */}
+        {matchedCurated.length > 0 && activeSet !== "lucide" && activeSet !== "mdi" && (
+          <div className="mb-10">
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-secondary" />
+              <h3 className="font-mono text-xs uppercase tracking-wider text-secondary font-semibold">
+                Featured & Instant Icons
+              </h3>
             </div>
-          </>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {matchedCurated.map((icon) => {
+                const isCopied = copiedKey === icon.id;
+                return (
+                  <div
+                    key={icon.id}
+                    className="group relative flex flex-col items-center justify-center rounded-xl border border-border bg-background p-4 text-center hover:border-secondary transition-all shadow-sm"
+                  >
+                    <div
+                      className="mb-3 flex h-10 w-10 items-center justify-center text-foreground transition-transform group-hover:scale-110"
+                      dangerouslySetInnerHTML={{ __html: icon.svg }}
+                    />
+                    <span className="line-clamp-1 font-mono text-xs text-foreground font-medium">{icon.name}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{icon.set}</span>
+
+                    {/* Action buttons */}
+                    <div className="mt-3 flex gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => copySvgString(icon.svg, icon.name, icon.id)}
+                        className="rounded-md border border-border bg-muted/60 p-1.5 text-xs text-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors"
+                        title="Copy SVG"
+                      >
+                        {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadSvgFile(icon.svg, icon.name)}
+                        className="rounded-md border border-border bg-muted/60 p-1.5 text-xs text-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors"
+                        title="Download SVG"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
-        <div className="mt-8 text-center">
-          <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-secondary">
-            Browse all on Iconify <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
+        {/* Live Iconify Results */}
+        {activeSet !== "featured" && (
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+                Iconify Deep Search Results {apiIcons.length > 0 && `(${apiIcons.length})`}
+              </h3>
+              {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-secondary" />}
+            </div>
+
+            {apiIcons.length === 0 && !isFetching ? (
+              <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                No external icons found for "{debouncedQuery}". Try another keyword or explore the featured icons above.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {apiIcons.map((icon) => {
+                  const key = `${icon.prefix}:${icon.name}`;
+                  const isCopied = copiedKey === key;
+                  return (
+                    <motion.div
+                      key={key}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="group relative flex flex-col items-center justify-center rounded-xl border border-border bg-background p-4 text-center hover:border-secondary transition-all shadow-sm"
+                    >
+                      <img
+                        src={`https://api.iconify.design/${icon.prefix}/${icon.name}.svg`}
+                        alt={icon.name}
+                        loading="lazy"
+                        className="mb-3 h-10 w-10 transition-transform group-hover:scale-110 filter dark:invert"
+                      />
+                      <span className="line-clamp-1 font-mono text-xs text-foreground font-medium">{icon.name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{icon.prefix}</span>
+
+                      <div className="mt-3 flex gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => copyApiSvg(icon)}
+                          className="rounded-md border border-border bg-muted/60 p-1.5 text-xs text-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors"
+                          title="Copy SVG"
+                        >
+                          {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
