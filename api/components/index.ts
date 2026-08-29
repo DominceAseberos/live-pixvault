@@ -30,18 +30,37 @@ function matchesSearch(component: RedisComponent, query: string): boolean {
   return haystack.includes(query.toLowerCase());
 }
 
-async function filteredIds(category: string, query: string): Promise<{ ids: string[]; total: number }> {
-  const redis = getRedis();
-  const normalizedCategory = category && category.toLowerCase() !== "all"
-    ? DEFAULT_ALLOWED_CATEGORIES.find((item) => item.toLowerCase() === category.toLowerCase()) ?? ""
-    : "";
+function normalizeCategories(category: string, categories: string): string[] {
+  const requested = category && category.toLowerCase() !== "all"
+    ? [category]
+    : categories.split(",").map((item) => item.trim()).filter(Boolean);
 
-  if (category && category.toLowerCase() !== "all" && !normalizedCategory) {
-    return { ids: [], total: 0 };
+  const normalized = requested
+    .map((requestedCategory) => DEFAULT_ALLOWED_CATEGORIES.find((item) => item.toLowerCase() === requestedCategory.toLowerCase()) ?? "")
+    .filter(Boolean);
+
+  return Array.from(new Set(normalized));
+}
+
+async function idsForCategories(categories: string[]): Promise<string[]> {
+  const redis = getRedis();
+  if (categories.length === 0) {
+    return await redis.zrange<string[]>(REDIS_KEYS.COMPONENTS_INDEX, 0, -1, { rev: true }) ?? [];
+  }
+  if (categories.length === 1) {
+    return await redis.zrange<string[]>(REDIS_KEYS.category(categories[0]), 0, -1, { rev: true }) ?? [];
   }
 
-  const indexKey = normalizedCategory ? REDIS_KEYS.category(normalizedCategory) : REDIS_KEYS.COMPONENTS_INDEX;
-  const ids = await redis.zrange<string[]>(indexKey, 0, -1, { rev: true }) ?? [];
+  const [allIds, ...categoryIds] = await Promise.all([
+    redis.zrange<string[]>(REDIS_KEYS.COMPONENTS_INDEX, 0, -1, { rev: true }),
+    ...categories.map((item) => redis.zrange<string[]>(REDIS_KEYS.category(item), 0, -1, { rev: true })),
+  ]);
+  const allowedIds = new Set(categoryIds.flatMap((ids) => ids ?? []));
+  return (allIds ?? []).filter((id) => allowedIds.has(id));
+}
+
+async function filteredIds(categories: string[], query: string): Promise<{ ids: string[]; total: number }> {
+  const ids = await idsForCategories(categories);
   if (!query) return { ids, total: ids.length };
 
   const records = await readComponents(ids);
@@ -57,21 +76,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const redis = getRedis();
       const isCount = ["true", "1"].includes(queryString(req, "count").toLowerCase());
       const category = queryString(req, "category");
+      const categoriesQuery = queryString(req, "categories");
       const query = queryString(req, "q");
       const offset = queryInteger(req, "offset", 0, 0, 100_000);
       const limit = queryInteger(req, "limit", 24, 1, MAX_PAGE_SIZE);
 
-      const normalizedCategory = category && category.toLowerCase() !== "all"
-        ? DEFAULT_ALLOWED_CATEGORIES.find((item) => item.toLowerCase() === category.toLowerCase()) ?? ""
-        : "";
+      const normalizedCategories = normalizeCategories(category, categoriesQuery);
+      const hasRequestedCategoryFilter = Boolean(
+        (category && category.toLowerCase() !== "all") || categoriesQuery.trim(),
+      );
 
-      if (category && category.toLowerCase() !== "all" && !normalizedCategory) {
+      if (hasRequestedCategoryFilter && normalizedCategories.length === 0) {
         return res.status(200).json(isCount ? { count: 0 } : { items: [], total: 0, offset, limit, hasMore: false });
       }
 
-      const indexKey = normalizedCategory ? REDIS_KEYS.category(normalizedCategory) : REDIS_KEYS.COMPONENTS_INDEX;
-
-      if (!query) {
+      if (!query && normalizedCategories.length <= 1) {
+        const indexKey = normalizedCategories[0]
+          ? REDIS_KEYS.category(normalizedCategories[0])
+          : REDIS_KEYS.COMPONENTS_INDEX;
         const total = await redis.zcard(indexKey);
         if (isCount) return res.status(200).json({ count: total });
 
@@ -86,7 +108,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         });
       }
 
-      const filtered = await filteredIds(normalizedCategory, query);
+      const filtered = await filteredIds(normalizedCategories, query);
       if (isCount) return res.status(200).json({ count: filtered.total });
 
       const ids = filtered.ids.slice(offset, offset + limit);

@@ -9,37 +9,54 @@ import { usePersistentSet } from "@/hooks/usePersistentSet";
 import { countAIComponents, listAIComponents } from "@/services/component.service";
 import { componentIdentity, type UIComponent } from "@/types/resources";
 
-const CATEGORIES = [
-  "All", "Buttons", "Cards", "Inputs", "Forms", "Navigation", "Dialogs", "Tables",
-  "Loaders", "Checkboxes", "Toggles", "Badges", "Alerts", "Avatars", "Tooltips",
-  "Progress", "Empty States", "Cursors", "Errors",
-];
+const FILTER_GROUPS = [
+  { value: "all", label: "All", categories: [] },
+  { value: "actions", label: "Actions", categories: ["Buttons", "Checkboxes", "Toggles"] },
+  { value: "forms", label: "Forms & Input", categories: ["Inputs", "Forms"] },
+  { value: "display", label: "Data Display", categories: ["Cards", "Tables", "Badges", "Avatars"] },
+  { value: "feedback", label: "Feedback", categories: ["Alerts", "Loaders", "Progress", "Empty States", "Errors"] },
+  { value: "navigation", label: "Navigation", categories: ["Navigation"] },
+  { value: "overlays", label: "Overlays", categories: ["Dialogs", "Tooltips"] },
+  { value: "utility", label: "Utility", categories: ["Cursors"] },
+] as const;
+
+type FilterGroupValue = (typeof FILTER_GROUPS)[number]["value"];
 
 const ITEMS_PER_PAGE = 9;
 const IFRAME_STYLE = `<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script><style>*{box-sizing:border-box}body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;font-family:system-ui,sans-serif;background:#0a0a14;}</style></head><body>`;
 
-const matchesLocalFilter = (component: UIComponent, category: string, search: string) => {
-  const categoryMatches = category === "All" || component.category.toLowerCase() === category.toLowerCase();
+const matchesLocalFilter = (component: UIComponent, categories: readonly string[], search: string) => {
+  const categoryMatches = categories.length === 0 || categories.some((category) => component.category.toLowerCase() === category.toLowerCase());
   const normalized = search.trim().toLowerCase();
   const searchMatches = !normalized || `${component.name} ${component.category} ${component.description ?? ""}`.toLowerCase().includes(normalized);
   return categoryMatches && searchMatches;
 };
 
 const UIComponents = () => {
+  const [activeGroup, setActiveGroup] = useState<FilterGroupValue>("all");
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const { values: savedComponents, toggle: toggleSavedComponent } = usePersistentSet("pixvault_saved_components");
+  const activeGroupConfig = FILTER_GROUPS.find((group) => group.value === activeGroup) ?? FILTER_GROUPS[0];
+  const selectedCategories = useMemo(
+    () => activeCategory !== "All" ? [activeCategory] : Array.from(activeGroupConfig.categories),
+    [activeCategory, activeGroupConfig],
+  );
+  const selectedCategoryKey = selectedCategories.join("|");
+  const activeFilterLabel = activeCategory !== "All"
+    ? activeCategory
+    : activeGroup === "all" ? "All components" : activeGroupConfig.label;
 
   const localFiltered = useMemo(
-    () => COMPONENTS.filter((component) => matchesLocalFilter(component, activeCategory, search)),
-    [activeCategory, search],
+    () => COMPONENTS.filter((component) => matchesLocalFilter(component, selectedCategories, search)),
+    [search, selectedCategories],
   );
 
   const countQuery = useQuery({
-    queryKey: ["components", "count", activeCategory, search],
-    queryFn: () => countAIComponents({ category: activeCategory, q: search }),
+    queryKey: ["components", "count", selectedCategoryKey, search],
+    queryFn: () => countAIComponents({ categories: selectedCategories, q: search }),
   });
   const remoteTotal = countQuery.data ?? 0;
   const totalResults = localFiltered.length + remoteTotal;
@@ -51,11 +68,11 @@ const UIComponents = () => {
   const remoteLimit = Math.max(0, ITEMS_PER_PAGE - localPageItems.length);
 
   const pageQuery = useQuery({
-    queryKey: ["components", "page", activeCategory, search, remoteOffset, remoteLimit],
+    queryKey: ["components", "page", selectedCategoryKey, search, remoteOffset, remoteLimit],
     queryFn: () => listAIComponents({
       offset: remoteOffset,
       limit: remoteLimit || 1,
-      category: activeCategory,
+      categories: selectedCategories,
       q: search,
     }),
     enabled: remoteLimit > 0,
@@ -68,7 +85,7 @@ const UIComponents = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeCategory, search]);
+  }, [selectedCategoryKey, search]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -127,21 +144,57 @@ const UIComponents = () => {
           </div>
         </div>
 
-        <div className="mb-10 flex gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:justify-center sm:overflow-visible">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category}
-              type="button"
-              onClick={() => setActiveCategory(category)}
-              className={`rounded-full px-4 py-2 font-mono text-xs transition-all ${
-                activeCategory === category
-                  ? "bg-secondary text-secondary-foreground"
-                  : "border border-border text-muted-foreground hover:border-secondary hover:text-foreground"
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+        <div className="mb-10 space-y-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:justify-center sm:overflow-visible">
+            {FILTER_GROUPS.map((group) => (
+              <button
+                key={group.value}
+                type="button"
+                onClick={() => {
+                  setActiveGroup(group.value);
+                  setActiveCategory("All");
+                }}
+                className={`shrink-0 rounded-full px-4 py-2 font-mono text-xs transition-all ${
+                  activeGroup === group.value
+                    ? "bg-secondary text-secondary-foreground"
+                    : "border border-border text-muted-foreground hover:border-secondary hover:text-foreground"
+                }`}
+              >
+                {group.label}
+              </button>
+            ))}
+          </div>
+
+          {activeGroupConfig.categories.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:justify-center sm:overflow-visible">
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Type</span>
+              <button
+                type="button"
+                onClick={() => setActiveCategory("All")}
+                className={`shrink-0 rounded-md border px-3 py-1.5 font-mono text-[11px] transition-colors ${
+                  activeCategory === "All"
+                    ? "border-secondary/60 bg-secondary/10 text-secondary"
+                    : "border-border text-muted-foreground hover:border-secondary/60 hover:text-foreground"
+                }`}
+              >
+                All {activeGroupConfig.label}
+              </button>
+              {activeGroupConfig.categories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setActiveCategory(category)}
+                  className={`shrink-0 rounded-md border px-3 py-1.5 font-mono text-[11px] transition-colors ${
+                    activeCategory === category
+                      ? "border-secondary/60 bg-secondary/10 text-secondary"
+                      : "border-border text-muted-foreground hover:border-secondary/60 hover:text-foreground"
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {componentFeedFailed && (
@@ -153,7 +206,7 @@ const UIComponents = () => {
 
         <div className="mb-6 text-center">
           <span className="font-mono text-xs text-muted-foreground">
-            {countQuery.isLoading ? "Counting library…" : `${totalResults} component${totalResults === 1 ? "" : "s"} found`}
+            {countQuery.isLoading ? "Counting library…" : `${activeFilterLabel} · ${totalResults} component${totalResults === 1 ? "" : "s"}`}
           </span>
         </div>
 

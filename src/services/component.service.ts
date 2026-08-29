@@ -5,6 +5,7 @@ export interface ComponentQuery {
   limit?: number;
   q?: string;
   category?: string;
+  categories?: string[];
 }
 
 export interface ComponentPage {
@@ -20,7 +21,12 @@ function buildParams(query: ComponentQuery = {}): URLSearchParams {
   if (typeof query.offset === "number") params.set("offset", String(query.offset));
   if (typeof query.limit === "number") params.set("limit", String(query.limit));
   if (query.q?.trim()) params.set("q", query.q.trim());
-  if (query.category?.trim() && query.category !== "All") params.set("category", query.category.trim());
+  if (query.category?.trim() && query.category !== "All") {
+    params.set("category", query.category.trim());
+  } else if (query.categories?.length) {
+    const categories = query.categories.map((category) => category.trim()).filter(Boolean);
+    if (categories.length) params.set("categories", categories.join(","));
+  }
   return params;
 }
 
@@ -44,7 +50,7 @@ export async function listAIComponents(query: ComponentQuery = {}): Promise<Comp
   };
 }
 
-export async function countAIComponents(query: Pick<ComponentQuery, "q" | "category"> = {}): Promise<number> {
+export async function countAIComponents(query: Pick<ComponentQuery, "q" | "category" | "categories"> = {}): Promise<number> {
   const params = buildParams(query);
   params.set("count", "true");
   const res = await fetch(`/api/components?${params.toString()}`, {
