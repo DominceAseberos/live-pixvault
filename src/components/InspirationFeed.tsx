@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Bookmark, Flame, Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -65,25 +65,36 @@ const InspirationFeed = () => {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { values: saved, toggle: toggleSaved } = usePersistentSet("pixvault_saved_inspiration");
+  const requestRef = useRef<AbortController | null>(null);
 
   const fetchSource = useCallback(async (sourceKey: string) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
+
     try {
-      const res = await fetch(`/api/inspiration?source=${encodeURIComponent(sourceKey)}`);
+      const res = await fetch(`/api/inspiration?source=${encodeURIComponent(sourceKey)}`, { signal: controller.signal });
       if (!res.ok) throw new Error("Feed request failed");
-      const json = await res.json();
-      const feedItems: FeedItem[] = json?.data?.items || [];
-      setItems(feedItems);
-    } catch {
-      toast.error("Could not refresh this feed right now.");
-      setItems([]);
+      const json = await res.json() as { data?: { items?: FeedItem[] } };
+      if (requestRef.current === controller) setItems(json.data?.items ?? []);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (requestRef.current === controller) {
+        toast.error("Could not refresh this feed right now.");
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     void fetchSource(activeSource);
+    return () => requestRef.current?.abort();
   }, [activeSource, fetchSource]);
 
   const toggleSave = (link: string) => {

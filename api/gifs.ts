@@ -1,162 +1,134 @@
-import { redis, REDIS_KEYS } from "../lib/redis.ts";
+import type { ApiRequest, ApiResponse } from "../lib/api.ts";
+import { errorMessage, queryString, setReadOnlyHeaders } from "../lib/api.ts";
+import { getRedis, REDIS_KEYS } from "../lib/redis.ts";
 
-const CACHE_TTL_SECONDS = 1800; // 30 minutes cache
+const CACHE_TTL_SECONDS = 1800;
+const ALLOWED_SUBREDDITS = new Set(["gifs", "reactiongifs", "highqualitygifs", "animatedpixelart", "cinemagraphs", "webdev"]);
 
-const extractGifUrl = (post: any): string | null => {
-  if (post.url?.endsWith(".gif")) return post.url;
-  if (post.preview?.images?.[0]?.variants?.gif?.source?.url) {
-    return post.preview.images[0].variants.gif.source.url.replace(/&amp;/g, "&");
+interface RedditImageSource { url?: string }
+interface RedditPreviewImage {
+  source?: RedditImageSource;
+  resolutions?: RedditImageSource[];
+  variants?: { gif?: { source?: RedditImageSource }; mp4?: { source?: RedditImageSource } };
+}
+interface RedditPost {
+  id?: string;
+  title?: string;
+  url?: string;
+  permalink?: string;
+  subreddit?: string;
+  score?: number;
+  created_utc?: number;
+  thumbnail?: string;
+  preview?: { images?: RedditPreviewImage[] };
+}
+interface RedditListing { data?: { children?: Array<{ data?: RedditPost }>; after?: string | null } }
+interface GifItem { id: string; title: string; url: string; gifUrl: string; previewUrl: string; subreddit: string; score: number; created: number }
+interface GifPayload { items: GifItem[]; after: string | null; sub: string }
+
+const decodeUrl = (value?: string) => value?.replace(/&amp;/g, "&") ?? "";
+
+function extractGifUrl(post: RedditPost): string | null {
+  if (post.url?.toLowerCase().endsWith(".gif")) return post.url;
+  const preview = post.preview?.images?.[0];
+  const gif = decodeUrl(preview?.variants?.gif?.source?.url);
+  if (gif) return gif;
+
+  const mp4 = decodeUrl(preview?.variants?.mp4?.source?.url);
+  if (mp4) return mp4;
+
+  if (post.url?.includes("imgur.com") && post.url.toLowerCase().endsWith(".gifv")) {
+    return post.url.replace(/\.gifv$/i, ".gif");
   }
-  if (post.preview?.images?.[0]?.variants?.mp4?.source?.url) {
-    return post.preview.images[0].variants.mp4.source.url.replace(/&amp;/g, "&");
-  }
-  if (post.url?.includes("imgur.com") && post.url?.endsWith(".gifv")) {
-    return post.url.replace(".gifv", ".gif");
-  }
-  if (post.url?.includes("i.redd.it") && (post.url?.endsWith(".gif") || post.url?.endsWith(".png") || post.url?.endsWith(".jpg"))) {
-    return post.url;
-  }
-  if (post.preview?.images?.[0]?.source?.url) {
-    return post.preview.images[0].source.url.replace(/&amp;/g, "&");
-  }
-  if (post.thumbnail && post.thumbnail.startsWith("http")) {
-    return post.thumbnail;
-  }
+
+  if (post.url?.includes("i.redd.it") && /\.(gif|png|jpe?g)$/i.test(post.url)) return post.url;
+  const source = decodeUrl(preview?.source?.url);
+  if (source) return source;
+  if (post.thumbnail?.startsWith("http")) return post.thumbnail;
   return null;
-};
+}
 
-const getPreviewUrl = (post: any): string => {
-  if (post.preview?.images?.[0]?.resolutions) {
-    const resolutions = post.preview.images[0].resolutions;
-    const mid = resolutions[Math.min(2, resolutions.length - 1)];
-    if (mid?.url) return mid.url.replace(/&amp;/g, "&");
-  }
-  if (post.thumbnail && post.thumbnail.startsWith("http")) return post.thumbnail;
+function getPreviewUrl(post: RedditPost): string {
+  const resolutions = post.preview?.images?.[0]?.resolutions ?? [];
+  const mid = resolutions[Math.min(2, Math.max(0, resolutions.length - 1))];
+  const resolution = decodeUrl(mid?.url);
+  if (resolution) return resolution;
+  if (post.thumbnail?.startsWith("http")) return post.thumbnail;
   return "";
-};
+}
 
-export default async function handler(req: any, res: any) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+function fallbackPayload(sub: string): GifPayload {
+  const now = Date.now() / 1000;
+  return {
+    sub,
+    after: null,
+    items: [1, 2, 3, 4].map((index) => ({
+      id: `local_${index}`,
+      title: `PIXVAULT curated animation ${index}`,
+      url: "/gifs",
+      gifUrl: `/assets/gifs/gif_${index}.gif`,
+      previewUrl: `/assets/gifs/gif_${index}.gif`,
+      subreddit: "pixvault",
+      score: 0,
+      created: now,
+    })),
+  };
+}
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  setReadOnlyHeaders(res, 120);
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const sub = typeof req.query?.sub === "string" && req.query.sub.trim() ? req.query.sub.trim() : "gifs";
-  const query = typeof req.query?.q === "string" ? req.query.q.trim() : "";
-  const after = typeof req.query?.after === "string" ? req.query.after.trim() : "";
-
-  const cacheKey = `crawler:gifs:${sub}:${query || "hot"}:${after || "first"}`;
+  const requestedSub = queryString(req, "sub", "gifs");
+  const normalizedSub = requestedSub.toLowerCase();
+  const sub = ALLOWED_SUBREDDITS.has(normalizedSub) ? requestedSub : "gifs";
+  const query = queryString(req, "q").slice(0, 80);
+  const after = queryString(req, "after").slice(0, 120);
+  const cacheKey = REDIS_KEYS.crawler(`gifs:${sub.toLowerCase()}:${query.toLowerCase() || "hot"}:${after || "first"}`);
 
   try {
-    // 1. Check Upstash Redis Cache
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return res.status(200).json({ cached: true, ...cached as any });
-    }
+    const redis = getRedis();
+    const cached = await redis.get<GifPayload>(cacheKey);
+    if (cached?.items?.length) return res.status(200).json({ cached: true, ...cached });
 
-    // 2. Fetch from Reddit with proper server-side headers
-    let endpoint = "";
-    if (query) {
-      endpoint = `https://www.reddit.com/r/${encodeURIComponent(sub)}/search.json?q=${encodeURIComponent(query)}&restrict_sr=on&sort=relevance&limit=24${after ? `&after=${encodeURIComponent(after)}` : ""}`;
-    } else {
-      endpoint = `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.json?limit=24${after ? `&after=${encodeURIComponent(after)}` : ""}`;
-    }
+    const base = query
+      ? `https://www.reddit.com/r/${encodeURIComponent(sub)}/search.json?q=${encodeURIComponent(query)}&restrict_sr=on&sort=relevance&limit=24`
+      : `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.json?limit=24`;
+    const endpoint = `${base}${after ? `&after=${encodeURIComponent(after)}` : ""}&raw_json=1`;
 
-    const redditRes = await fetch(endpoint, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PIXVAULT/1.0",
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(8000),
+    const redditResponse = await fetch(endpoint, {
+      headers: { "User-Agent": "PIXVAULT-GIF-Crawler/1.0 (+https://live-pixvault.vercel.app)", Accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
     });
+    if (!redditResponse.ok) throw new Error(`Reddit returned ${redditResponse.status}`);
 
-    if (!redditRes.ok) {
-      throw new Error(`Reddit API responded with status ${redditRes.status}`);
-    }
-
-    const json = await redditRes.json();
-    const children = json?.data?.children || [];
-
-    const items = children
-      .map((child: any) => {
-        const post = child?.data;
-        if (!post) return null;
+    const json = await redditResponse.json() as RedditListing;
+    const items: GifItem[] = (json.data?.children ?? [])
+      .map((child) => child.data)
+      .filter((post): post is RedditPost => Boolean(post?.id && post.title))
+      .map((post) => {
         const gifUrl = extractGifUrl(post);
         if (!gifUrl) return null;
         return {
-          id: post.id,
-          title: post.title,
-          url: `https://reddit.com${post.permalink}`,
+          id: post.id ?? "unknown",
+          title: post.title ?? "Untitled GIF",
+          url: post.permalink ? `https://reddit.com${post.permalink}` : (post.url ?? "https://reddit.com"),
           gifUrl,
           previewUrl: getPreviewUrl(post) || gifUrl,
-          subreddit: post.subreddit,
-          score: post.score || 0,
-          created: post.created_utc || Date.now() / 1000,
+          subreddit: post.subreddit ?? sub,
+          score: post.score ?? 0,
+          created: post.created_utc ?? Date.now() / 1000,
         };
       })
-      .filter(Boolean);
+      .filter((item): item is GifItem => item !== null);
 
-    const payload = {
-      items,
-      after: json?.data?.after || null,
-      sub,
-    };
+    if (items.length === 0) throw new Error("Reddit returned no usable GIF media");
 
-    // Cache in Redis
-    if (items.length > 0) {
-      await redis.set(cacheKey, payload, { ex: CACHE_TTL_SECONDS });
-    }
-
+    const payload: GifPayload = { items, after: json.data?.after ?? null, sub };
+    await redis.set(cacheKey, payload, { ex: CACHE_TTL_SECONDS });
     return res.status(200).json({ cached: false, ...payload });
-  } catch (error: any) {
-    console.error(`API /api/gifs error for r/${sub}:`, error);
-
-    // Fallback static curated GIFs in case Reddit rate limits completely
-    const fallbackItems = [
-      {
-        id: "fb_1",
-        title: "Neon Wave Animation",
-        url: "https://pixvault.dev",
-        gifUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZhcTZsN2NvdW52enRxNG1jNG51OWtxM2t5dnh5NmFpMnBqYnp2byZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKTDnUxE0gpnPNe/giphy.gif",
-        previewUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZhcTZsN2NvdW52enRxNG1jNG51OWtxM2t5dnh5NmFpMnBqYnp2byZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKTDnUxE0gpnPNe/giphy.gif",
-        subreddit: sub,
-        score: 1420,
-        created: Date.now() / 1000,
-      },
-      {
-        id: "fb_2",
-        title: "Cyberpunk Pixel Loader",
-        url: "https://pixvault.dev",
-        gifUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2F3OXFmMHN6YWpqNGV0NWk0OTNxamptOTZqZzRhZTNvdzV4NmtmZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT9IgzoKnwFNmISR8I/giphy.gif",
-        previewUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2F3OXFmMHN6YWpqNGV0NWk0OTNxamptOTZqZzRhZTNvdzV4NmtmZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT9IgzoKnwFNmISR8I/giphy.gif",
-        subreddit: sub,
-        score: 980,
-        created: Date.now() / 1000,
-      },
-      {
-        id: "fb_3",
-        title: "Geometric Morphing UI",
-        url: "https://pixvault.dev",
-        gifUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGJ3cmZ4ZXB6dmNuY3Z4c3I2cXp0N2R2MHBwOWZldmtxczQ5ZWZzNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oEjI6SIIHBdRxXI40/giphy.gif",
-        previewUrl: "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGJ3cmZ4ZXB6dmNuY3Z4c3I2cXp0N2R2MHBwOWZldmtxczQ5ZWZzNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3oEjI6SIIHBdRxXI40/giphy.gif",
-        subreddit: sub,
-        score: 850,
-        created: Date.now() / 1000,
-      },
-    ];
-
-    return res.status(200).json({
-      cached: false,
-      items: fallbackItems,
-      after: null,
-      sub,
-    });
+  } catch (error) {
+    console.warn(`API /api/gifs fallback for r/${sub}:`, errorMessage(error));
+    return res.status(200).json({ cached: false, fallback: true, ...fallbackPayload(sub) });
   }
 }

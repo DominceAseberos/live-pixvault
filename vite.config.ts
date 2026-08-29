@@ -1,88 +1,90 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ApiRequest, ApiResponse, QueryValue } from "./lib/api.ts";
 
-// Custom Vite plugin to handle /api/* endpoints in local development
-function apiDevPlugin() {
+interface DevApiRequest extends IncomingMessage {
+  query?: Record<string, QueryValue>;
+  body?: unknown;
+}
+
+interface DevApiResponse extends ServerResponse {
+  status(code: number): DevApiResponse;
+  json(payload: unknown): DevApiResponse;
+}
+
+async function parseBody(req: DevApiRequest): Promise<void> {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method ?? "")) return;
+  let body = "";
+  for await (const chunk of req) {
+    body += String(chunk);
+    if (body.length > 64_000) throw new Error("Request body exceeds the 64 KB local development limit.");
+  }
+  if (!body) {
+    req.body = {};
+    return;
+  }
+  try {
+    req.body = JSON.parse(body) as unknown;
+  } catch {
+    req.body = body;
+  }
+}
+
+function apiDevPlugin(): Plugin {
   return {
-    name: "api-dev-server",
-    configureServer(server: any) {
-      server.middlewares.use(async (req: any, res: any, next: any) => {
+    name: "pixvault-api-dev-server",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (incoming, outgoing, next) => {
+        const req = incoming as DevApiRequest;
+        const res = outgoing as DevApiResponse;
         const url = req.url ? new URL(req.url, `http://${req.headers.host || "localhost"}`) : null;
-        if (!url || !url.pathname.startsWith("/api/")) {
-          return next();
-        }
+        if (!url || !url.pathname.startsWith("/api/")) return next();
 
-        // Bridge res.status and res.json for Express/Vercel-style handlers
         res.status = (code: number) => {
           res.statusCode = code;
           return res;
         };
-        res.json = (data: any) => {
+        res.json = (payload: unknown) => {
           res.setHeader("Content-Type", "application/json; charset=utf-8");
-          res.end(JSON.stringify(data));
+          res.end(JSON.stringify(payload));
           return res;
         };
-
-        // Parse query params into req.query
         req.query = Object.fromEntries(url.searchParams.entries());
 
-        // Parse JSON body if present
-        if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
-          let body = "";
-          req.on("data", (chunk: any) => {
-            body += chunk;
-          });
-          await new Promise<void>((resolve) => req.on("end", () => resolve()));
-          try {
-            req.body = body ? JSON.parse(body) : {};
-          } catch {
-            req.body = body;
-          }
-        }
-
         try {
-          const pathname = url.pathname;
-          if (pathname === "/api/components" || pathname === "/api/components/") {
-            const { default: handler } = await import("./api/components/index.ts");
-            return await handler(req, res);
+          await parseBody(req);
+          const pathname = url.pathname.replace(/\/$/, "") || "/";
+          let handler: ((request: ApiRequest, response: ApiResponse) => Promise<unknown>) | undefined;
+
+          if (pathname === "/api/components") {
+            handler = (await import("./api/components/index.ts")).default;
+          } else if (pathname.startsWith("/api/components/")) {
+            req.query.id = pathname.slice("/api/components/".length);
+            handler = (await import("./api/components/[id].ts")).default;
+          } else if (pathname === "/api/generate") {
+            handler = (await import("./api/generate.ts")).default;
+          } else if (pathname === "/api/inspiration") {
+            handler = (await import("./api/inspiration.ts")).default;
+          } else if (pathname === "/api/gifs") {
+            handler = (await import("./api/gifs.ts")).default;
           }
 
-          if (pathname.startsWith("/api/components/")) {
-            const id = pathname.replace("/api/components/", "").replace(/\/$/, "");
-            req.query.id = id;
-            const { default: handler } = await import("./api/components/[id].ts");
-            return await handler(req, res);
-          }
-
-          if (pathname === "/api/generate" || pathname === "/api/generate/") {
-            const { default: handler } = await import("./api/generate.ts");
-            return await handler(req, res);
-          }
-
-          if (pathname === "/api/inspiration" || pathname === "/api/inspiration/") {
-            const { default: handler } = await import("./api/inspiration.ts");
-            return await handler(req, res);
-          }
-
-          if (pathname === "/api/gifs" || pathname === "/api/gifs/") {
-            const { default: handler } = await import("./api/gifs.ts");
-            return await handler(req, res);
-          }
-
-          next();
-        } catch (error: any) {
+          if (!handler) return next();
+          await handler(req as ApiRequest, res as ApiResponse);
+        } catch (error) {
           console.error("Vite API dev middleware error:", error);
-          res.status(500).json({ error: error.message || "Internal Dev Server Error" });
+          if (!res.headersSent) {
+            res.status(500).json({ error: error instanceof Error ? error.message : "Internal development server error" });
+          }
         }
       });
     },
   };
 }
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env variables (including non-VITE_ for server dev) into process.env
   const env = loadEnv(mode, process.cwd(), "");
   Object.assign(process.env, env);
 
@@ -90,15 +92,11 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
-      hmr: {
-        overlay: false,
-      },
+      hmr: { overlay: false },
     },
     plugins: [react(), apiDevPlugin()],
     resolve: {
-      alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-      },
+      alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
   };
 });

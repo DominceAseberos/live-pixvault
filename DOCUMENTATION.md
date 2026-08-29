@@ -1,47 +1,85 @@
 # PIXVAULT Engineering Documentation
 
 **System:** PIXVAULT (`live-pixvault`)
-**Architecture baseline:** 2026-08-16
-**Runtime model:** client-rendered React SPA + external read APIs + Supabase database/Edge Function
-**Primary design goal:** a fast, resilient, account-free resource vault for UI assets and frontend inspiration.
+**Architecture baseline:** 2026-08-29
+**Runtime:** React SPA + Vercel Serverless Functions + Upstash Redis
+**Primary goal:** an account-free resource vault that stays useful even when external providers are unavailable.
 
 ---
 
-## 1. Executive summary
+## 1. Product purpose
 
-PIXVAULT is not a textbook server-rendered MVC application. It is better modeled as a **feature-oriented React SPA with layered separation of concerns**:
+PIXVAULT collects practical frontend resources into one fast interface:
 
-- **Routes/pages** compose feature screens.
-- **Feature components** own presentation and short-lived interaction state.
-- **Hooks** own reusable client-state behavior such as debouncing and persistent sets.
-- **Services** own reusable remote I/O for Supabase, Iconify, Picsum, and generic HTTP behavior.
-- **Data modules** own curated static catalog content.
-- **Supabase** owns persistent generated components and the trusted AI-generation write path.
-- **App providers** own cross-cutting concerns: routing, query cache, tooltips, toast surfaces, reduced-motion behavior, and global render recovery.
+- copy-paste UI components
+- GIF/animation references
+- Iconify icons
+- placeholder/editorial photos
+- frontend/design inspiration feeds
 
-This is intentionally not forced into classic MVC terminology. For a React SPA, the current split gives stronger separation of concerns without adding artificial controller classes.
+The product is intentionally lightweight. Users do not need an account simply to browse, save locally, copy code, or download resources.
 
-### Architecture assessment
+The architecture therefore prioritizes:
 
-| Area | Before hardening | Current baseline |
-| --- | --- | --- |
-| Route composition | Repeated page chrome | Shared `PageShell`, lazy routes |
-| Server state | Ad-hoc fetches despite Query provider | React Query for component and icon server state; abortable fetches elsewhere |
-| Static catalog | Mixed into a large controller/view file | Extracted to `src/data/componentCatalog.ts` |
-| Supabase access | Client creation with empty-string fallback | Optional safe configuration + service boundary |
-| Saved items | Memory-only Sets | `localStorage` persistence through `usePersistentSet` |
-| Search | Manual timers / stale-request risk | Debounce hook and request cancellation where applicable |
-| Clipboard/downloads | Fire-and-forget | Guarded errors and user feedback |
-| Generated preview isolation | `allow-scripts allow-same-origin` | sandbox reduced to `allow-scripts` |
-| Generated DB writes | Anonymous direct insert policy | public writes revoked; service-role Edge Function only |
-| Global failures | No render boundary | `AppErrorBoundary` recovery |
-| Accessibility | Hover-heavy, inconsistent focus | visible focus ring, touch-friendly actions, reduced-motion support, ARIA improvements |
-| Dependency security | Audit findings | `npm audit` = 0 vulnerabilities |
-| Initial bundle | ~843 KB monolithic route bundle | ~361 KB initial app chunk + lazy feature chunks |
+1. low operational cost
+2. graceful degradation
+3. safe handling of externally generated HTML
+4. minimal browser-side secrets
+5. simple maintenance
+6. separation between curated content, cached external content, and generated/community content
 
 ---
 
-## 2. Route map
+## 2. Architecture decision
+
+PIXVAULT is **not classic MVC**. For a React SPA, forcing controllers/models into MVC classes would add ceremony without improving boundaries.
+
+The project follows a feature-oriented layered architecture:
+
+```text
+Routes / Pages
+      |
+      v
+Feature Components
+      |
+      +--> Hooks / client state
+      |
+      +--> Services
+              |
+              v
+        same-origin /api/*
+              |
+              v
+       Vercel serverless
+          /          \
+         v            v
+   Upstash Redis   External APIs
+                      |
+                      +-- RSS/Atom
+                      +-- HN
+                      +-- GitHub
+                      +-- Reddit
+                      +-- Stack Overflow
+                      +-- optional Groq
+```
+
+### Separation of concerns
+
+| Layer | Responsibility |
+| --- | --- |
+| `src/pages/` | route-level composition |
+| `src/components/` | presentation and short-lived UI interaction state |
+| `src/hooks/` | reusable browser-state lifecycle |
+| `src/services/` | typed browser-to-server/resource I/O |
+| `src/data/` | curated static component catalog |
+| `api/` | Vercel serverless transport/controllers |
+| `lib/` | server infrastructure, validation, Redis, auth, throttling |
+| `scripts/` | migration, recovery, and controlled batch generation |
+| Upstash Redis | durable component records, indexes, crawler cache, rate-limit counters |
+
+---
+
+## 3. Route map
 
 ```mermaid
 flowchart LR
@@ -54,135 +92,150 @@ flowchart LR
   Router --> Inspiration["/inspiration"]
   Router --> Missing["* / 404"]
 
-  Home --> Story[Hero / Storyboard / Stats]
-  Components --> Catalog[Curated catalog + Supabase generated items]
-  Gifs --> Reddit[Reddit JSON endpoints]
-  Icons --> Iconify[Iconify API]
-  Photos --> Picsum[Picsum API]
-  Inspiration --> Feeds[RSS2JSON / HN / GitHub]
+  Components --> ComponentsAPI["/api/components"]
+  Gifs --> GifsAPI["/api/gifs"]
+  Inspiration --> InspirationAPI["/api/inspiration"]
+
+  ComponentsAPI --> Redis[(Upstash Redis)]
+  GifsAPI --> Redis
+  InspirationAPI --> Redis
 ```
 
-All route modules are lazy-loaded with `React.lazy` and `Suspense`. The command menu (`Ctrl/Cmd + K`) provides global navigation.
+All feature route modules are lazy-loaded with `React.lazy` and `Suspense`.
+
+`vercel.json` explicitly rewrites application routes to `index.html`, fixing direct-load/refresh 404s without rewriting `/api/*`.
 
 ---
 
-## 3. Current file structure
+## 4. File structure
 
 ```text
 live-pixvault/
-├─ src/
-│  ├─ App.tsx                    # providers, lazy routing, route fallback
-│  ├─ main.tsx
-│  ├─ index.css                  # global tokens, focus/reduced-motion rules
-│  ├─ pages/                     # route-level composition
+├─ api/
 │  ├─ components/
-│  │  ├─ AppErrorBoundary.tsx
-│  │  ├─ GlobalCommandMenu.tsx
-│  │  ├─ PageShell.tsx
-│  │  ├─ Navbar.tsx
-│  │  ├─ Footer.tsx
+│  │  ├─ index.ts               # list/count/create components
+│  │  └─ [id].ts                # read/delete one component
+│  ├─ generate.ts               # protected Groq component generation
+│  ├─ gifs.ts                   # Reddit GIF proxy/cache + local fallback
+│  └─ inspiration.ts            # crawler/cache for design sources
+│
+├─ lib/
+│  ├─ api.ts                    # typed request/response helpers
+│  ├─ auth.ts                   # fail-closed bearer-secret guard
+│  ├─ rate-limit.ts             # Upstash-backed fixed-window limit
+│  ├─ redis.ts                  # lazy server-only Redis client + key schema
+│  └─ sanitize-component.ts     # new + legacy HTML validation/recreation
+│
+├─ scripts/
+│  ├─ migrate-supabase-to-redis.ts
+│  ├─ rebuild-redis-components.ts
+│  └─ recreate-components.ts
+│
+├─ src/
+│  ├─ App.tsx
+│  ├─ pages/
+│  ├─ components/
 │  │  ├─ UIComponents.tsx
 │  │  ├─ GifShowcase.tsx
-│  │  ├─ IconShowcase.tsx
-│  │  ├─ IllustrationGallery.tsx
 │  │  ├─ InspirationFeed.tsx
-│  │  └─ ui/                     # shadcn/Radix primitives
-│  ├─ data/
-│  │  └─ componentCatalog.ts     # curated component definitions
+│  │  └─ ...
+│  ├─ data/componentCatalog.ts
 │  ├─ hooks/
 │  │  ├─ useDebouncedValue.ts
 │  │  └─ usePersistentSet.ts
-│  ├─ lib/
-│  │  ├─ clipboard.ts
-│  │  ├─ env.ts
-│  │  ├─ supabase.ts
-│  │  └─ utils.ts
 │  ├─ services/
 │  │  ├─ component.service.ts
-│  │  ├─ http.ts
 │  │  ├─ iconify.service.ts
-│  │  └─ picsum.service.ts
-│  ├─ types/
-│  │  └─ resources.ts
+│  │  ├─ picsum.service.ts
+│  │  └─ http.ts
+│  ├─ types/resources.ts
 │  └─ test/
-│     └─ example.test.ts         # catalog integrity invariants
-├─ supabase/
-│  ├─ functions/
-│  │  └─ ai-designer/index.ts
-│  └─ migrations/
-│     ├─ 20260527035257_create_components_table.sql
-│     └─ 20260816023000_harden_component_writes.sql
-├─ vite.config.ts
-├─ vitest.config.ts
+│     ├─ example.test.ts
+│     └─ redis-and-sanitization.test.ts
+│
+├─ supabase/                    # historical migration/function files only
+├─ vite.config.ts               # Vite + same-process local API middleware
+├─ vercel.json                  # SPA deep-link rewrites
+├─ tsconfig.app.json
+├─ tsconfig.node.json           # strict server/API/script checks
 └─ package.json
 ```
 
-`src/App.css` and the unused compatibility `NavLink` wrapper were removed as dead code.
+The old browser runtime files `src/lib/supabase.ts` and `src/lib/env.ts` were removed during the Redis migration.
 
 ---
 
-## 4. Separation of concerns
+## 5. Upstash Redis data model
 
-### Presentation layer
+### Component record
 
-`pages/` and `components/` render the experience. Route pages are intentionally thin and use `PageShell` for shared navbar/footer composition.
+```text
+component:<id>
+```
 
-### Domain/data layer
+Value:
 
-`src/data/componentCatalog.ts` contains curated component records. Keeping catalog content outside `UIComponents.tsx` prevents content changes from touching pagination, querying, persistence, or card behavior.
+```json
+{
+  "id": "...",
+  "name": "Aurora Glassbutton",
+  "category": "Buttons",
+  "author": "Groq AI Bot",
+  "html": "<style>...</style><button>...</button>",
+  "sourceUrl": "https://pixvault.dev/",
+  "description": "...",
+  "createdAt": "2026-08-03T19:00:03.807249+00:00",
+  "provenance": "legacy-recreated"
+}
+```
 
-### Service layer
+### Global chronological index
 
-- `component.service.ts`: Supabase component reads/counts.
-- `http.ts`: status checking, timeout/cancellation, normalized HTTP errors.
-- `iconify.service.ts`: Iconify search/SVG retrieval.
-- `picsum.service.ts`: Picsum list/image URL behavior.
+```text
+components:index
+```
 
-The remaining GIF and inspiration parsing is still colocated with those feature components. This is acceptable at the present complexity, but should be extracted if either feature acquires mutations, authentication, multiple consumers, or substantially more parsing logic.
+Type: Redis sorted set.
+Member: component ID.
+Score: component creation timestamp.
 
-### Reusable client-state layer
+### Category indexes
 
-- `useDebouncedValue`: timing/debounce lifecycle.
-- `usePersistentSet`: bookmark-like Set state persisted in `localStorage`.
+```text
+components:category:buttons
+components:category:cards
+components:category:empty-states
+...
+```
 
-### Infrastructure layer
+These avoid downloading every component when the UI filters by category.
 
-- `lib/env.ts`: safe environment reading.
-- `lib/supabase.ts`: optional client initialization.
-- Supabase migration/Edge Function files: persistent data and trusted writes.
+### Crawler/cache keys
+
+```text
+crawler:hn
+crawler:github
+crawler:stackoverflow
+crawler:reddit-webdev
+crawler:gifs:gifs:hot:first
+...
+```
+
+Feed caches use TTLs. Inspiration defaults to one hour; GIF cache defaults to 30 minutes.
+
+### Rate-limit keys
+
+```text
+ratelimit:<scope>:<client>:<time-bucket>
+```
+
+They are short-lived and exist only to protect write/generation endpoints.
 
 ---
 
-## 5. State ownership and use-state rules
+## 6. Component read flow
 
-PIXVAULT follows the rule that state should have one owner and derived values should not be duplicated.
-
-| State | Owner | Persistence | Notes |
-| --- | --- | --- | --- |
-| Current route | React Router | URL | canonical navigation state |
-| Supabase component list/count | TanStack Query | query cache | retry + stale time configured globally |
-| Icon search results | TanStack Query | query cache | debounced query; request signal supported |
-| GIF list/page token | `GifShowcase` | memory | stale requests cancelled with `AbortController` |
-| Photo list/page | `IllustrationGallery` | memory | requests cancellable; duplicate actions guarded |
-| Inspiration feed | `InspirationFeed` | memory + `sessionStorage` cache | source cache is optional/failure-tolerant |
-| Saved components/GIFs/articles | `usePersistentSet` | `localStorage` | survives refresh; storage denial does not crash UI |
-| Search/filter/page controls | feature component | memory | local UI state only |
-| Reduced motion | Framer `MotionConfig` + OS preference | system | animations degrade automatically |
-
-### Preventive interaction rules
-
-- Expensive network actions are disabled or guarded while already loading.
-- Debounced searches do not launch on every keystroke.
-- Aborted requests do not show false error toasts.
-- Copy/download actions surface success/failure.
-- Route-level Suspense has an explicit loading fallback.
-- Unknown render failures fall back to a full-app recovery boundary.
-
----
-
-## 6. Data and request flows
-
-### Component catalog read flow
+The component UI no longer downloads the complete database.
 
 ```mermaid
 sequenceDiagram
@@ -190,316 +243,499 @@ sequenceDiagram
   participant UI as UIComponents
   participant Q as TanStack Query
   participant S as component.service
-  participant DB as Supabase components
+  participant API as /api/components
+  participant R as Upstash Redis
 
   U->>UI: Open /components
-  UI->>Q: query components/ai
-  Q->>S: listAIComponents()
-  S->>DB: SELECT public component fields
-  DB-->>S: rows
-  S-->>Q: normalized UIComponent[]
-  Q-->>UI: cached data/error state
-  UI-->>U: local catalog + generated records
+  UI->>Q: request filtered count
+  Q->>S: countAIComponents(q, category)
+  S->>API: GET ?count=true
+  API->>R: ZCARD or filtered scan
+  R-->>API: count
+  API-->>UI: count
+
+  UI->>S: request only required page slice
+  S->>API: GET ?offset=&limit=&q=&category=
+  API->>R: ZRANGE + MGET
+  R-->>API: requested records
+  API-->>UI: items + total + hasMore
 ```
 
-If Supabase client variables are missing, the service returns an empty remote list and the curated local catalog remains usable.
+Curated local records are rendered first. Redis records fill the remaining page slots. This keeps the static curated library immediately usable even if Redis is temporarily unavailable.
 
-### AI generated component write flow
+---
+
+## 7. Component write/generation flow
+
+### Manual/community write
+
+`POST /api/components` is not public-by-default.
+
+```text
+request
+  -> bearer-secret guard
+  -> Redis rate limit
+  -> schema/category validation
+  -> strict HTML validation
+  -> Redis record
+  -> global index
+  -> category index
+```
+
+If neither `COMPONENT_WRITE_SECRET` nor `ADMIN_SECRET` is configured, the endpoint returns **503**. Missing configuration never means anonymous access.
+
+### Delete
+
+`DELETE /api/components/:id` requires `ADMIN_SECRET` or `COMPONENT_WRITE_SECRET` and also fails closed.
+
+The handler removes:
+
+1. `component:<id>`
+2. member from `components:index`
+3. member from its category index
+
+### AI generation
+
+`POST /api/generate` requires:
+
+```text
+AI_DESIGNER_SECRET
+GROQ_API_KEY
+```
+
+Flow:
 
 ```mermaid
 sequenceDiagram
-  participant C as Trusted caller/scheduler
-  participant F as ai-designer Edge Function
+  participant C as Trusted caller
+  participant API as /api/generate
+  participant R as Upstash
   participant G as Groq
-  participant DB as Supabase
 
-  C->>F: POST + Bearer AI_DESIGNER_SECRET
-  F->>F: method + secret validation
-  F->>DB: read recent names
-  F->>G: bounded generation request
-  G-->>F: JSON component
-  F->>F: shape/category/HTML safety validation
-  F->>DB: INSERT using service role
-  DB-->>F: success
-  F-->>C: 201
+  C->>API: POST + Bearer secret
+  API->>API: authenticate + rate-limit
+  API->>R: read recent component names
+  API->>G: bounded JSON generation request
+  G-->>API: name/category/html JSON
+  API->>API: strict validation
+  API->>R: component + indexes
+  API-->>C: created component
 ```
 
-The browser does **not** own the service-role key or AI designer secret.
-
-### Icon search flow
-
-Search text → debounced value → React Query key → Iconify service → cancellable/status-checked response → cards. Copy and download fetch the raw SVG and handle failure explicitly.
+No AI-generation UI is exposed unless the server-side keys/secret are intentionally configured.
 
 ---
 
-## 7. Database model and RLS
+## 8. HTML safety model
 
-### Table
+PIXVAULT renders component previews with `iframe srcDoc`.
 
-```mermaid
-erDiagram
-  COMPONENTS {
-    uuid id PK
-    text name
-    text category
-    text author
-    text source_url
-    text html
-    timestamptz created_at
-  }
-```
-
-The original migration enabled RLS and allowed anonymous SELECT + INSERT. The hardening migration removes anonymous mutation capability:
+The iframe sandbox remains:
 
 ```text
-public/anon:
-  SELECT -> allowed by existing RLS policy
-  INSERT/UPDATE/DELETE -> revoked
-
-trusted Edge Function:
-  service role -> performs validated INSERT
+allow-scripts
 ```
 
-This keeps the account-free read experience while preventing arbitrary public clients from directly filling the catalog with HTML.
+It intentionally does **not** include `allow-same-origin`.
 
-### Deployment requirement
+The Tailwind CDN script used by the preview shell requires scripts, so stored/generated HTML itself must be sanitized independently.
 
-Apply the migration before relying on the new write-security model:
+### New components
 
-`supabase/migrations/20260816023000_harden_component_writes.sql`
+New community/AI component HTML rejects:
 
-The Edge Function must be configured with server-side secrets. `verify_jwt = false` is intentional only because the function enforces its own dedicated bearer secret; do not expose that secret to the frontend.
+- `<script>`
+- `<iframe>`
+- `<object>`
+- `<embed>`
+- `<meta>`
+- `<base>`
+- `<link>`
+- `<applet>`
+- `<style>`
+- inline `on*=` event handlers
+- `javascript:` URIs
+- `data:text/html` URIs
+- `action=`
+- `formaction=`
+- `srcdoc=`
 
----
+New components are expected to use Tailwind utility classes.
 
-## 8. Security controls
+### Legacy recreation
 
-1. **Generated HTML preview isolation**
-   - iframe uses `sandbox="allow-scripts"` without `allow-same-origin`.
-   - database HTML is not injected into the main application DOM.
+The original database was generated before these rules existed. Almost every legacy item contained a `<style>` block, and some included script/event behavior.
 
-2. **Generated HTML server validation**
-   - rejects `<style>`, `<script>`, `<iframe>`, `<object>`, `<embed>`, `<meta>`, and `<base>`.
-   - rejects `javascript:` URLs.
-   - validates expected category, bounded name, and bounded HTML size.
+Deleting all styled records would have destroyed the catalog, so migration uses a separate **recreation** path:
 
-3. **Database write restriction**
-   - direct anonymous writes revoked.
-   - service-role write is isolated to the Edge Function.
+1. remove `<script>` blocks
+2. remove iframe/object/embed/applet content
+3. remove document-level meta/base/link tags
+4. remove inline `on*=` event handlers
+5. remove form navigation/submission attributes
+6. remove executable URI patterns
+7. preserve safe legacy `<style>` blocks
+8. remove CSS `@import`, `expression()`, executable URI schemes, `behavior`, and `-moz-binding`
+9. run the rebuilt output through final safety assertions
 
-4. **Secret handling**
-   - browser only sees `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-   - service role, Groq key, and generator secret remain server-side.
+If a record still fails validation, it is moved to a quarantine key and removed from the served index.
 
-5. **Network hardening**
-   - reusable HTTP helper checks non-2xx responses and applies a timeout.
-   - interactive searches support cancellation.
-   - downloads check status before creating object URLs.
+### Rebuild result on 2026-08-29
 
-6. **Dependency hygiene**
-   - React Router and Vite upgraded to patched current lines during this baseline.
-   - `npm audit` reports zero vulnerabilities as of 2026-08-16.
+The live Upstash import initially contained 1,000 raw legacy records.
 
-The shadcn chart primitive contains a controlled `dangerouslySetInnerHTML` path for generated chart CSS from local configuration. It is not part of the generated component HTML pipeline.
+Before repair:
 
----
+- 983 contained `<style>`
+- 21 contained `<script>`
+- 75 contained inline event handlers
+- 89 contained at least one executable-pattern class checked during the audit
+- 1,000 lacked provenance metadata
 
-## 9. UX and accessibility baseline
+After `npm run redis:rebuild`:
 
-Implemented improvements:
-
-- `Ctrl/Cmd + K` command navigation.
-- route-level loading state.
-- global render error recovery.
-- branded 404 with SPA links.
-- mobile navigation ARIA state (`aria-expanded`, `aria-controls`, explicit label).
-- persistent bookmarks/saves.
-- horizontal overflow handling for dense filter chips.
-- visible focus styling.
-- reduced-motion support via Framer Motion and CSS media query.
-- touch-visible resource card actions instead of hover-only controls on smaller viewports.
-- inline retry state where Supabase generated items fail.
-- copy/download feedback and failure handling.
-- disabled duplicate network actions during loading.
-
-### Added/corrected catalog components
-
-The manual catalog now includes practical patterns that were missing:
-
-- Command Palette
-- Responsive Action Drawer
-- Sortable Data Table
-- Validated Sign In Form
-- Empty Collection State
-- Inline Retry State
-
-`Status Badge` was corrected from the `Buttons` category to `Badges`.
+- safely recreated: **1,000**
+- quarantined: **0**
+- executable-pattern rows remaining: **0**
+- category indexes rebuilt: **13 populated legacy categories**
+- provenance: `legacy-recreated`
 
 ---
 
-## 10. Performance baseline
+## 9. Legacy Supabase migration status
 
-Before route splitting, the production build emitted one initial JavaScript bundle of roughly **843 KB** minified.
+Before the final cutover, the old Supabase table reported **2,004 component rows**.
 
-After route-level lazy loading, the baseline build emits approximately:
+During migration, 1,000 records reached Upstash. The old Supabase project then became unavailable:
 
-- initial app chunk: **361 KB** minified / ~118 KB gzip
-- homepage route: ~34 KB
-- feature routes: ~5–10 KB each
-- component catalog: separately loaded chunk (~272 KB)
+- project REST hostname no longer resolves from the development environment
+- the project ref is no longer returned by the connected Lynx Supabase account
+- current accessible Supabase projects are unrelated projects
 
-The large static catalog is intentionally kept out of routes that do not use it.
+Therefore:
 
-Future optimization is only warranted if real-user performance data shows a need. The most obvious next target would be splitting the large static component catalog by category or loading it as structured data.
-
----
-
-## 11. Error-handling strategy
-
-```mermaid
-flowchart TD
-  Action[User action] --> Request{Network request?}
-  Request -- No --> Local[Local state update]
-  Request -- Yes --> Guard[Debounce / loading guard / abort previous]
-  Guard --> Call[Status-checked request]
-  Call -->|Success| Success[Update cache/state + feedback]
-  Call -->|Abort| Ignore[No false error toast]
-  Call -->|Failure| Recover[Inline retry or toast; retain usable local content]
-  Recover --> UI[Interface remains interactive]
-  Local --> UI
-  Success --> UI
-  UI --> Render{Render throws?}
-  Render -- Yes --> Boundary[AppErrorBoundary recovery]
+```text
+known old count:       2,004
+recovered in Upstash:  1,000
+unavailable legacy:    1,004
 ```
 
-Failures are handled as close as practical to their owner, while catastrophic render failures are caught at the app boundary.
+The 1,004 missing rows are **not fabricated or silently replaced**. The migration/recovery script remains in the repository in case a valid backup or restored Supabase endpoint becomes available later.
+
+The recovered 1,000 are the current durable community/archive dataset.
 
 ---
 
-## 12. Test and validation strategy
+## 10. Inspiration crawler
 
-Current automated test invariants verify:
+The inspiration feature now goes through the server:
 
-1. curated component identities are unique;
-2. corrected/essential catalog entries exist in the expected categories;
-3. catalog entries contain required metadata and a valid HTTP(S) source.
+```text
+Browser
+  -> /api/inspiration?source=<source>
+  -> Redis cache check
+  -> external source on cache miss
+  -> normalize
+  -> store crawler:<source> with TTL
+  -> return normalized items
+```
 
-Required pre-merge/pre-release gate:
+Sources include:
+
+- Reddit communities
+- Stack Overflow
+- GitHub repositories
+- Hacker News
+- CSS-Tricks
+- Smashing Magazine
+- Awwwards
+- Codrops
+- Dev.to
+- web.dev
+- A List Apart
+- UX Collective
+
+RSS/Atom feeds are fetched and parsed directly with `fast-xml-parser`; PIXVAULT no longer needs RSS2JSON for this server path.
+
+This is a **request-triggered crawler/cache**, not a scheduled background crawler. A future Cron endpoint can pre-warm these same Redis keys without changing the UI contract.
+
+### Failure behavior
+
+- cached result available -> serve cache
+- live fetch succeeds -> normalize + cache
+- source fails with no cache -> API error -> UI retry state
+- stale frontend requests -> cancelled/ignored using `AbortController`
+
+---
+
+## 11. GIF flow
+
+```text
+Browser
+  -> /api/gifs
+  -> Redis cache
+  -> Reddit JSON on cache miss
+  -> normalize media
+  -> cache 30 minutes
+```
+
+Reddit may return 403/rate-limit server traffic. In that case the API returns the curated local files in:
+
+```text
+public/assets/gifs/
+```
+
+The GIF UI therefore remains usable rather than rendering a broken empty page.
+
+Client requests are abortable, and an older request cannot clear the loading state of a newer request.
+
+---
+
+## 12. Browser state ownership
+
+| State | Owner | Persistence |
+| --- | --- | --- |
+| route | React Router | URL |
+| component counts/pages | TanStack Query | query cache |
+| component filter/page | `UIComponents` | memory |
+| icon results | TanStack Query | query cache |
+| GIF results/token | `GifShowcase` | memory + server cache |
+| inspiration result/source | `InspirationFeed` | memory + server cache |
+| saved resources | `usePersistentSet` | `localStorage` |
+| reduced-motion preference | Framer Motion / OS | system |
+
+Derived values such as total pages and filtered local records are calculated rather than duplicated into state.
+
+---
+
+## 13. Error handling and preventive UX
+
+### Application-level
+
+`AppErrorBoundary` provides render recovery for unexpected React failures.
+
+### Network-level
+
+- non-2xx responses become explicit errors
+- requests have bounded timeouts where supported
+- GIF/inspiration stale requests are aborted
+- copy/download operations report success/failure
+- component library remains useful with static curated records if Redis fails
+- GIFs have a bundled local fallback
+
+### API-level
+
+- invalid methods -> 405
+- malformed component IDs -> 400
+- invalid HTML/schema -> 400
+- missing write secret -> 503
+- bad bearer secret -> 401
+- rate limit -> 429 + `Retry-After`
+- missing AI provider key -> 503
+- external provider error -> normalized 5xx response or documented local fallback
+
+---
+
+## 14. Local development
+
+`npm run dev` uses Vite and a small development plugin that mounts the same handlers used under Vercel:
+
+```text
+/api/components
+/api/components/:id
+/api/generate
+/api/gifs
+/api/inspiration
+```
+
+This avoids maintaining a duplicate Express backend just for development.
+
+The middleware has bounded JSON-body parsing and typed request/response bridging.
+
+---
+
+## 15. Environment/security boundary
+
+### Required
+
+```env
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+These are server-side variables only.
+
+Never use:
+
+```env
+VITE_UPSTASH_REDIS_REST_TOKEN=
+```
+
+The built frontend was checked and did not contain the Upstash URL/token.
+
+### Optional mutations
+
+```env
+ADMIN_SECRET=
+COMPONENT_WRITE_SECRET=
+```
+
+### Optional AI
+
+```env
+AI_DESIGNER_SECRET=
+GROQ_API_KEY=
+```
+
+### Legacy recovery only
+
+```env
+LEGACY_SUPABASE_URL=
+LEGACY_SUPABASE_ANON_KEY=
+```
+
+The legacy names intentionally do not use `VITE_`.
+
+---
+
+## 16. Vercel deployment
+
+Production requirements:
+
+1. Upstash Redis URL/token configured in Vercel
+2. deploy repository branch containing `api/*`
+3. `vercel.json` included
+4. optional write/AI secrets configured only when those features are intentionally enabled
+5. verify direct route loads
+6. verify `/api/components?count=true`
+7. verify generated client assets do not contain Redis credentials
+
+Expected direct-route behavior after cutover:
+
+```text
+/             -> 200
+/components   -> 200
+/gifs         -> 200
+/icons        -> 200
+/photos       -> 200
+/inspiration  -> 200
+```
+
+---
+
+## 17. Quality gates
+
+Run before every deployment:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run lint
-npm run test -- --run
+npm test
 npm run build
-npm audit
+npm audit --omit=dev
 git diff --check
 ```
 
-2026-08-16 result:
-- TypeScript: PASS
-- ESLint: PASS with 0 errors; 7 non-blocking shadcn Fast Refresh warnings
-- Vitest: 3/3 PASS
-- Vite production build: PASS
-- npm audit: 0 vulnerabilities
-- `git diff --check`: PASS
+2026-08-29 baseline:
+
+| Gate | Result |
+| --- | --- |
+| frontend TypeScript | pass |
+| server/API/scripts TypeScript | pass |
+| ESLint | 0 errors; 7 shadcn Fast Refresh warnings |
+| Vitest | 13/13 pass |
+| Vite build | pass |
+| npm audit | 0 vulnerabilities |
+| diff whitespace | pass |
+| Redis PING | PONG |
+| rebuilt Redis component count | 1,000 |
+| executable patterns after rebuild | 0 |
 
 ---
 
-## 13. Implementation timeline
+## 18. Maintenance commands
 
-### Engineering timeline
+```bash
+npm run typecheck
+npm run redis:rebuild
+npm run migrate:dry
+npm run migrate:write
+npm run components:generate -- 10
+```
+
+### `redis:rebuild`
+
+Use after importing legacy records or when category indexes need to be regenerated. It is idempotent for safe records.
+
+### `migrate:dry`
+
+Reads a restored legacy Supabase source, recreates records in memory, and reports accepted/quarantined counts without writing Redis.
+
+### `migrate:write`
+
+Runs the same validation then persists accepted records and indexes to Redis.
+
+### `components:generate`
+
+Optional controlled batch generation through Groq. It requires a local/server `GROQ_API_KEY`; every result passes strict new-component validation before Redis persistence.
+
+---
+
+## 19. Operational invariants
+
+Future changes should preserve these rules:
+
+1. No database secret in browser-prefixed environment variables.
+2. Browser code talks to same-origin APIs, not Redis directly.
+3. New generated HTML never bypasses strict validation.
+4. Legacy HTML never bypasses recreation/quarantine.
+5. Mutations fail closed if their secret is absent.
+6. Component browsing remains paginated.
+7. Category writes update both global and category indexes.
+8. Deletes remove all related indexes.
+9. External-feed failures must not take down unrelated resource screens.
+10. Direct SPA routes must continue working on production refresh.
+11. `api/**`, `lib/**`, and `scripts/**` remain inside strict server TypeScript validation.
+12. Documentation must distinguish current runtime architecture from historical migration code.
+
+---
+
+## 20. Implementation timeline
 
 ```mermaid
 gantt
-  title PIXVAULT hardening baseline - 2026-08-16
+  title PIXVAULT hardening and Upstash migration
   dateFormat  YYYY-MM-DD
   axisFormat  %b %d
 
-  section Audit
-  Routes, structure, state and security audit :done, audit, 2026-08-16, 1d
-  Dependency and build audit                :done, deps, 2026-08-16, 1d
+  section Application hardening
+  Route/component separation       :done, 2026-08-16, 1d
+  Error/accessibility hardening    :done, 2026-08-16, 1d
+  Route code splitting             :done, 2026-08-16, 1d
 
-  section Architecture
-  Shared shell + global recovery             :done, arch1, 2026-08-16, 1d
-  Service/hooks/data separation              :done, arch2, 2026-08-16, 1d
-  Route-level code splitting                 :done, arch3, 2026-08-16, 1d
+  section Redis migration
+  Upstash server layer             :done, 2026-08-29, 1d
+  Serverless APIs                  :done, 2026-08-29, 1d
+  Legacy component recreation      :done, 2026-08-29, 1d
+  Redis category indexes           :done, 2026-08-29, 1d
+  Crawler/GIF cache wiring         :done, 2026-08-29, 1d
+  SPA rewrite                      :done, 2026-08-29, 1d
 
-  section UX
-  Command navigation + accessibility         :done, ux1, 2026-08-16, 1d
-  Persistent saves + request prevention      :done, ux2, 2026-08-16, 1d
-  Component catalog additions/corrections    :done, ux3, 2026-08-16, 1d
-
-  section Security
-  iframe isolation                           :done, sec1, 2026-08-16, 1d
-  RLS/write-path hardening                   :done, sec2, 2026-08-16, 1d
-  Edge Function validation/auth              :done, sec3, 2026-08-16, 1d
-
-  section Validation
-  Type/lint/test/build/audit gate             :done, gate, 2026-08-16, 1d
-  Documentation baseline                      :done, docs, 2026-08-16, 1d
+  section Verification
+  Strict server TypeScript         :done, 2026-08-29, 1d
+  13-test safety suite             :done, 2026-08-29, 1d
+  Build/lint/audit gate            :done, 2026-08-29, 1d
+  Production cutover verification  :2026-08-29, 1d
 ```
 
-Observed session checkpoints:
-- **02:24 PHT** — Lynx scope/connection and audit started.
-- **02:52 PHT** — first hardened production build validated.
-- **02:59 PHT** — Vite/Router modernization and route splitting validated.
-- **03:06 PHT** — meaningful catalog-invariant tests validated.
-
-These timestamps are command/session checkpoints, not estimates of individual task duration.
-
 ---
 
-## 14. Maintenance rules
+## 21. Known limitations / next sensible additions
 
-### When adding a route
+- The request-triggered crawler is not yet pre-warmed by a scheduled Vercel Cron job.
+- Reddit may reject server traffic; GIFs intentionally fall back to bundled curated files.
+- AI generation is intentionally disabled until Groq + AI secret are configured.
+- The unrecovered 1,004 historical Supabase records require an external backup/restored old project; PIXVAULT does not invent replacements while that source is unavailable.
+- The seven remaining ESLint warnings are generated shadcn Fast Refresh export warnings and do not represent runtime defects.
 
-1. Add a lazy import and `<Route>` in `App.tsx`.
-2. Use `PageShell` unless the route intentionally owns full-page chrome.
-3. Add a command-menu destination if it is a primary resource.
-4. Provide loading, empty, and error behavior.
-
-### When adding a remote API
-
-1. Put reusable I/O in `src/services`.
-2. Use a typed response shape; avoid `any`.
-3. Check HTTP status.
-4. Support `AbortSignal` for search or changing filters.
-5. Do not duplicate server data into multiple independent states.
-6. Give the user a retry or stable fallback.
-
-### When adding a curated component
-
-1. Add it only to `src/data/componentCatalog.ts`.
-2. Use a unique `(author, category, name)` identity.
-3. Use the correct category.
-4. Include a real `http(s)` source URL.
-5. Keep the preview self-contained.
-6. Run catalog invariant tests.
-
-### When changing generated component writes
-
-Do not re-enable anonymous INSERT. Keep generation behind the trusted Edge Function and validate output before database insertion.
-
----
-
-## 15. Known boundaries / next sensible improvements
-
-These are not current blockers:
-
-- Extract Reddit and inspiration adapters into services if feature complexity grows.
-- Split the static component catalog by category only if real-user performance data justifies it.
-- Add browser-level route/a11y tests (Playwright) if this becomes a deployed product with regression requirements.
-- Add observability for Edge Function failures/rate limits before automating high-frequency generation.
-- Add a “Saved” unified route only if cross-resource saved-item browsing becomes a primary workflow.
-
-The current baseline deliberately avoids authentication, account synchronization, and unnecessary backend complexity because PIXVAULT’s product promise is an account-free resource browser.
-
----
-
-## 16. Notion documentation status
-
-This file is the canonical documentation payload for the 2026-08-16 hardening baseline.
-
-The connected Lynx runtime (`0.5.20-beta.9`) was checked before and after implementation. Its exposed tool surface currently includes local workspace/Git, GitHub, Vercel, Supabase, Neon, and Firebase actions, but **does not expose a Notion/external-MCP call tool**. Because the implementation was explicitly scoped to Lynx-only integrations, this documentation has not been published through a separate ChatGPT Notion connector.
-
-When Lynx exposes its configured Notion MCP call tool, publish this document as the architecture/engineering page rather than maintaining a divergent copy.
+The current production architecture should treat **Upstash Redis as the canonical persistent component store** and Supabase as historical migration context only.

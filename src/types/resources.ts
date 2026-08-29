@@ -5,6 +5,9 @@ export interface UIComponent {
   author: string;
   html: string;
   sourceUrl: string;
+  description?: string;
+  createdAt?: string;
+  provenance?: "curated" | "legacy-recreated" | "ai-generated" | "community";
 }
 
 export const componentIdentity = (component: UIComponent) =>

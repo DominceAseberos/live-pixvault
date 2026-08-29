@@ -38,12 +38,12 @@ const GifShowcase = () => {
   const debouncedQuery = useDebouncedValue(query.trim(), 500);
 
   const fetchGifs = useCallback(async (sub: string, searchQuery: string, afterToken: string | null = null, append = false) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
-    try {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
 
+    try {
       const params = new URLSearchParams({ sub });
       if (searchQuery) params.set("q", searchQuery);
       if (afterToken) params.set("after", afterToken);
@@ -54,17 +54,24 @@ const GifShowcase = () => {
       });
 
       if (!res.ok) throw new Error("GIF API error");
-      const data = await res.json();
-      const results: RedditGif[] = data?.items || [];
-      setAfter(data?.after || null);
-      setHasMore(Boolean(data?.after));
-      setGifs(prev => append ? [...prev, ...results] : results);
+      const data = await res.json() as { items?: RedditGif[]; after?: string | null };
+      if (abortRef.current !== controller) return;
+
+      const results = data.items ?? [];
+      setAfter(data.after ?? null);
+      setHasMore(Boolean(data.after));
+      setGifs((previous) => append ? [...previous, ...results] : results);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      if (!append) setGifs([]);
-      toast.error("Could not load GIFs. Using cached animations.");
+      if (abortRef.current === controller) {
+        if (!append) setGifs([]);
+        toast.error("Could not load GIFs. Using cached animations.");
+      }
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setLoading(false);
+      }
     }
   }, []);
 

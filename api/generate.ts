@@ -1,58 +1,68 @@
-import { redis, REDIS_KEYS, type RedisComponent } from "../lib/redis.ts";
-import { sanitizeAndValidateComponent, DEFAULT_ALLOWED_CATEGORIES } from "../lib/sanitize-component.ts";
 import { randomUUID } from "node:crypto";
+import type { ApiRequest, ApiResponse } from "../lib/api.ts";
+import { asRecord, errorMessage, setReadOnlyHeaders } from "../lib/api.ts";
+import { requireServerSecret } from "../lib/auth.ts";
+import { allowRequest } from "../lib/rate-limit.ts";
+import { getRedis, REDIS_KEYS, type RedisComponent } from "../lib/redis.ts";
+import { DEFAULT_ALLOWED_CATEGORIES, sanitizeAndValidateComponent } from "../lib/sanitize-component.ts";
 
 const STYLES = [
   "Glassmorphism", "Cyberpunk", "Neumorphism", "Retro 8-bit", "Brutalist",
   "Minimalist", "Aurora gradients", "Holographic", "Skeuomorphic", "Dark Mode Neon", "Claymorphism",
 ];
 
-export default async function handler(req: any, res: any) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+interface GroqResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+function pickCategory(raw: unknown): string {
+  if (typeof raw === "string") {
+    const match = DEFAULT_ALLOWED_CATEGORIES.find((category) => category.toLowerCase() === raw.trim().toLowerCase());
+    if (match) return match;
   }
+  return DEFAULT_ALLOWED_CATEGORIES[Math.floor(Math.random() * DEFAULT_ALLOWED_CATEGORIES.length)];
+}
+
+function pickStyle(raw: unknown): string {
+  if (typeof raw === "string" && raw.trim()) return raw.trim().slice(0, 80);
+  return STYLES[Math.floor(Math.random() * STYLES.length)];
+}
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
+  setReadOnlyHeaders(res);
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const groqApiKey = process.env.GROQ_API_KEY;
+  const auth = requireServerSecret(req, ["AI_DESIGNER_SECRET"]);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+  const groqApiKey = process.env.GROQ_API_KEY?.trim();
   if (!groqApiKey) {
     return res.status(503).json({ error: "Groq AI API key is not configured on the server." });
   }
 
-  const designerSecret = process.env.AI_DESIGNER_SECRET;
-  if (designerSecret) {
-    const authHeader = req.headers["authorization"];
-    if (authHeader !== `Bearer ${designerSecret}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-  }
-
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    
-    const requestedCategory = typeof body.category === "string" && body.category.trim()
-      ? body.category.trim()
-      : DEFAULT_ALLOWED_CATEGORIES[Math.floor(Math.random() * DEFAULT_ALLOWED_CATEGORIES.length)];
+    const rate = await allowRequest(req, "ai-generate", 12, 3600);
+    res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+    if (!rate.allowed) {
+      res.setHeader("Retry-After", String(rate.retryAfter));
+      return res.status(429).json({ error: "AI generation rate limit exceeded." });
+    }
 
-    const style = typeof body.style === "string" && body.style.trim()
-      ? body.style.trim()
-      : STYLES[Math.floor(Math.random() * STYLES.length)];
+    const body = asRecord(req.body);
+    const requestedCategory = pickCategory(body.category);
+    const style = pickStyle(body.style);
+    const redis = getRedis();
 
-    const recentIds: string[] = await redis.zrange(REDIS_KEYS.COMPONENTS_INDEX, 0, 15, { rev: true }) || [];
-    let recentNames = "";
+    const recentIds = await redis.zrange<string[]>(REDIS_KEYS.COMPONENTS_INDEX, 0, 15, { rev: true }) ?? [];
+    const recentNames: string[] = [];
     if (recentIds.length > 0) {
-      const keys = recentIds.map((id) => REDIS_KEYS.component(id));
-      const recentComponents: Array<RedisComponent | null> = await redis.mget(...keys);
-      recentNames = recentComponents
-        .filter((c): c is RedisComponent => Boolean(c?.name))
-        .map((c) => c.name)
-        .join(", ");
+      const recentComponents = await redis.mget<RedisComponent[]>(...recentIds.map((id) => REDIS_KEYS.component(id)));
+      for (const component of recentComponents) {
+        if (component?.name) recentNames.push(component.name);
+      }
     }
 
     const prompt = `You are an expert frontend UI designer.
@@ -62,13 +72,14 @@ Category: ${requestedCategory}
 Visual direction: ${style}
 
 Rules:
-1. Use Tailwind utility classes and semantic HTML. Inline style is allowed only when Tailwind cannot express a value.
-2. Do not output <style>, <script>, <iframe>, <object>, <embed>, <meta>, or <base> tags.
-3. Do not use javascript: URLs.
-4. Fit comfortably inside a 300px by 200px preview.
-5. Keep controls keyboard-usable and add accessible labels when visible text is insufficient.
-6. Avoid close duplicates of: ${recentNames || "(none yet)"}.
-7. Return only JSON with exactly: name, category, html. The category must be "${requestedCategory}".`;
+1. Use semantic HTML and Tailwind utility classes only. Do not output <style> tags.
+2. Do not output <script>, <iframe>, <object>, <embed>, <meta>, <base>, <link>, or <applet> tags.
+3. Do not use inline JavaScript event attributes such as onclick/onload/onerror.
+4. Do not use action, formaction, srcdoc, javascript: URLs, or data:text/html URLs.
+5. Fit comfortably inside a 300px by 200px preview.
+6. Keep controls keyboard-usable and add accessible labels when visible text is insufficient.
+7. Avoid close duplicates of: ${recentNames.join(", ") || "(none yet)"}.
+8. Return only JSON with exactly: name, category, html. The category must be "${requestedCategory}".`;
 
     const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -79,58 +90,51 @@ Rules:
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.85,
+        temperature: 0.75,
         response_format: { type: "json_object" },
       }),
       signal: AbortSignal.timeout(25_000),
     });
 
     if (!groqResponse.ok) {
-      const errText = await groqResponse.text();
-      console.error("Groq request failed:", groqResponse.status, errText);
+      const providerBody = await groqResponse.text();
+      console.error("Groq request failed:", groqResponse.status, providerBody.slice(0, 300));
       return res.status(502).json({ error: "AI generation provider failed" });
     }
 
-    const payload: any = await groqResponse.json();
-    const rawContent = payload?.choices?.[0]?.message?.content;
-    if (!rawContent) {
-      return res.status(502).json({ error: "AI generator returned empty response" });
-    }
+    const payload = await groqResponse.json() as GroqResponse;
+    const rawContent = payload.choices?.[0]?.message?.content;
+    if (!rawContent) return res.status(502).json({ error: "AI generator returned an empty response" });
 
-    const parsed = JSON.parse(rawContent);
+    const parsed = JSON.parse(rawContent) as unknown;
     const validated = sanitizeAndValidateComponent({
-      ...parsed,
+      ...asRecord(parsed),
+      category: requestedCategory,
       author: "Groq AI Designer",
-      sourceUrl: "Generated by Llama 3.3 70B",
+      sourceUrl: "https://console.groq.com/",
+      description: `${style} ${requestedCategory} component`,
     });
 
     const id = randomUUID().replace(/-/g, "").slice(0, 12);
     const createdAt = new Date().toISOString();
-
     const newComponent: RedisComponent = {
       id,
-      name: validated.name,
-      category: validated.category,
-      author: validated.author,
-      sourceUrl: validated.sourceUrl,
-      html: validated.html,
-      description: validated.description || `${style} ${validated.category} component`,
+      ...validated,
       createdAt,
+      provenance: "ai-generated",
     };
 
     const score = Date.now();
     const pipeline = redis.pipeline();
     pipeline.set(REDIS_KEYS.component(id), newComponent);
     pipeline.zadd(REDIS_KEYS.COMPONENTS_INDEX, { score, member: id });
+    pipeline.zadd(REDIS_KEYS.category(newComponent.category), { score, member: id });
     await pipeline.exec();
 
-    return res.status(201).json({
-      success: true,
-      component: newComponent,
-    });
-  } catch (error: any) {
+    return res.status(201).json({ success: true, component: newComponent });
+  } catch (error) {
     console.error("API /api/generate error:", error);
-    const status = error.name === "ComponentValidationError" ? 400 : 500;
-    return res.status(status).json({ error: error.message || "Component generation failed" });
+    const status = error instanceof Error && error.name === "ComponentValidationError" ? 400 : 500;
+    return res.status(status).json({ error: errorMessage(error, "Component generation failed") });
   }
 }
