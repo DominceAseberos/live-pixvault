@@ -17,17 +17,17 @@ interface FeedItem {
 }
 
 const SOURCES = [
+  { label: "Hacker News UI", key: "hn" },
+  { label: "GitHub Trending", key: "github" },
+  { label: "Dev.to UI/UX", key: "devto" },
+  { label: "CSS-Tricks", key: "css-tricks" },
+  { label: "Smashing Mag", key: "smashing" },
+  { label: "Awwwards", key: "awwwards" },
   { label: "Reddit r/webdev", key: "reddit-webdev" },
   { label: "Reddit r/UI_Design", key: "reddit-UI_Design" },
   { label: "Reddit r/frontend", key: "reddit-frontend" },
   { label: "Stack Overflow", key: "stackoverflow" },
-  { label: "GitHub Trending", key: "github" },
-  { label: "Hacker News UI", key: "hn" },
-  { label: "CSS-Tricks", key: "css-tricks" },
-  { label: "Smashing Mag", key: "smashing" },
-  { label: "Awwwards", key: "awwwards" },
   { label: "Codrops", key: "codrops" },
-  { label: "Dev.to UI/UX", key: "devto" },
 ];
 
 const relativeTime = (dateStr: string) => {
@@ -61,7 +61,7 @@ const getCardBg = (item: FeedItem) => {
 };
 
 const InspirationFeed = () => {
-  const [activeSource, setActiveSource] = useState("reddit-webdev");
+  const [activeSource, setActiveSource] = useState("hn");
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { values: saved, toggle: toggleSaved } = usePersistentSet("pixvault_saved_inspiration");

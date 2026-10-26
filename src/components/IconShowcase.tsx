@@ -1,15 +1,34 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search, Copy, Download, Sparkles, Check, RefreshCw } from "lucide-react";
+import { Search, Copy, Download, Sparkles, Check, RefreshCw, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { fetchIconSvg, iconSvgUrl, searchIconify, type IconResult } from "@/services/iconify.service";
-import { CURATED_ICONS, type CuratedIcon } from "@/data/curatedIcons";
+import {
+  batchFetchIconSvgs,
+  fetchIconSvg,
+  getCachedIconSvg,
+  searchIconify,
+  type IconResult,
+} from "@/services/iconify.service";
+import { CURATED_ICONS } from "@/data/curatedIcons";
 
-const POPULAR_QUERIES = ["arrow", "zap", "sparkles", "code", "home", "shield", "layers", "user", "star", "settings", "search", "terminal"];
-const ICON_PREVIEW_COLOR = "#d8d5e3";
+const POPULAR_QUERIES = [
+  "arrow",
+  "zap",
+  "sparkles",
+  "code",
+  "home",
+  "shield",
+  "layers",
+  "user",
+  "star",
+  "settings",
+  "search",
+  "terminal",
+];
+
 const ICON_SETS = [
   { label: "All Sets", value: "" },
   { label: "Featured (Offline)", value: "featured" },
@@ -43,6 +62,22 @@ const IconShowcase = () => {
     placeholderData: (previous) => previous,
   });
 
+  // Batch-hydrate SVGs whenever apiIcons changes
+  useEffect(() => {
+    if (!apiIcons.length) return;
+
+    let isMounted = true;
+    void batchFetchIconSvgs(apiIcons).then((batch) => {
+      if (isMounted) {
+        setSvgCache((prev) => ({ ...prev, ...batch }));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiIcons]);
+
   // Filter curated vendored icons
   const matchedCurated = useMemo(() => {
     if (!debouncedQuery && activeSet !== "featured") return CURATED_ICONS.slice(0, 12);
@@ -73,7 +108,7 @@ const IconShowcase = () => {
   const copyApiSvg = async (icon: IconResult) => {
     const key = `${icon.prefix}:${icon.name}`;
     try {
-      const svg = svgCache[key] ?? (await fetchIconSvg(icon));
+      const svg = svgCache[key] ?? getCachedIconSvg(key) ?? (await fetchIconSvg(icon));
       if (!svgCache[key]) setSvgCache((prev) => ({ ...prev, [key]: svg }));
       await copySvgString(svg, `${icon.prefix}:${icon.name}`, key);
     } catch {
@@ -83,7 +118,7 @@ const IconShowcase = () => {
 
   const downloadSvgFile = (svg: string, name: string) => {
     try {
-      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -92,9 +127,19 @@ const IconShowcase = () => {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success("Downloaded SVG!");
+      toast.success(`Downloaded ${name}.svg!`);
     } catch {
       toast.error("Download failed");
+    }
+  };
+
+  const downloadApiSvg = async (icon: IconResult) => {
+    const key = `${icon.prefix}:${icon.name}`;
+    try {
+      const svg = svgCache[key] ?? getCachedIconSvg(key) ?? (await fetchIconSvg(icon));
+      downloadSvgFile(svg, `${icon.prefix}-${icon.name}`);
+    } catch {
+      toast.error("Could not download SVG");
     }
   };
 
@@ -103,7 +148,7 @@ const IconShowcase = () => {
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <span className="font-mono text-xs uppercase tracking-widest text-secondary">
-            200,000+ Open Source Icons · Zero Bloat
+            200,000+ Open Source Icons · Zero Bloat · High-Speed Inlining
           </span>
           <h2 className="mt-4 font-display text-4xl font-bold text-foreground sm:text-5xl">
             Every icon you'll ever need.
@@ -215,20 +260,26 @@ const IconShowcase = () => {
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-                Iconify Deep Search Results {apiIcons.length > 0 && `(${apiIcons.length})`}
+                Icon Results {apiIcons.length > 0 && `(${apiIcons.length})`}
               </h3>
               {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-secondary" />}
             </div>
 
-            {apiIcons.length === 0 && !isFetching ? (
+            {isError ? (
+              <div className="rounded-xl border border-dashed border-red-500/30 bg-red-500/5 py-10 text-center text-sm text-muted-foreground">
+                Icon search is currently reconnecting. You can still use the Featured Icons above!
+              </div>
+            ) : apiIcons.length === 0 && !isFetching ? (
               <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                No external icons found for "{debouncedQuery}". Try another keyword or explore the featured icons above.
+                No icons found for "{debouncedQuery}". Try another keyword or explore the featured icons above.
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {apiIcons.map((icon) => {
                   const key = `${icon.prefix}:${icon.name}`;
                   const isCopied = copiedKey === key;
+                  const svg = svgCache[key] ?? getCachedIconSvg(key);
+
                   return (
                     <motion.div
                       key={key}
@@ -236,15 +287,30 @@ const IconShowcase = () => {
                       animate={{ opacity: 1, scale: 1 }}
                       className="group relative flex flex-col items-center justify-center rounded-xl border border-border bg-background p-4 text-center hover:border-secondary transition-all shadow-sm"
                     >
-                      <img
-                        src={iconSvgUrl(icon, ICON_PREVIEW_COLOR)}
-                        alt={icon.name}
-                        loading="lazy"
-                        className="mb-3 h-10 w-10 opacity-90 transition-[transform,opacity] group-hover:scale-110 group-hover:opacity-100"
-                      />
-                      <span className="line-clamp-1 font-mono text-xs text-foreground font-medium">{icon.name}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">{icon.prefix}</span>
+                      {/* Icon Rendering Area: Inline SVG with Zero Broken Image Glyphs */}
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center text-foreground transition-transform group-hover:scale-110">
+                        {svg ? (
+                          <div
+                            className="h-8 w-8 text-foreground/90 transition-opacity group-hover:text-primary"
+                            dangerouslySetInnerHTML={{ __html: svg }}
+                          />
+                        ) : isFetching ? (
+                          <div className="h-8 w-8 animate-pulse rounded-md bg-muted/60" />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted/40 text-muted-foreground">
+                            <Layers className="h-5 w-5 opacity-50" />
+                          </div>
+                        )}
+                      </div>
 
+                      <span className="line-clamp-1 w-full font-mono text-xs text-foreground font-medium" title={icon.name}>
+                        {icon.name}
+                      </span>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {icon.prefix}
+                      </span>
+
+                      {/* Action buttons: Both Copy AND Download */}
                       <div className="mt-3 flex gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
@@ -253,6 +319,14 @@ const IconShowcase = () => {
                           title="Copy SVG"
                         >
                           {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadApiSvg(icon)}
+                          className="rounded-md border border-border bg-muted/60 p-1.5 text-xs text-foreground hover:bg-secondary hover:text-secondary-foreground transition-colors"
+                          title="Download SVG"
+                        >
+                          <Download className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </motion.div>
